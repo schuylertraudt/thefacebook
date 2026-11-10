@@ -85,7 +85,9 @@ you out.
 - **Ad labels**: the desktop site labels ads "Ad". Labels shorter than
   `sponsoredFuzzyMinLength` match exactly only, and sponsored labels only count inside a
   post's header strip (`sponsoredHeaderPx`), so "Dad" or an "Ad" in post text never
-  hides a friend's post. Labels attached via `aria-labelledby` are resolved.
+  hides a friend's post. Labels attached via `aria-labelledby` are resolved. Labels are
+  also compared on their *visible* text: characters that are hidden, transparent,
+  zero-size or positioned off the label's line (Facebook's decoy letters) are dropped.
 - **Automatic feed units** (`autoFeedUnits`): the element with the most text+media children
   is taken as the feed list and its children are marked `data-fbk-unit`, so Sponsored /
   section hiding works without knowing Facebook's markup.
@@ -174,6 +176,8 @@ While it is on:
   container and its first units, the surroundings of every hide label and `dumpLabels`,
   and fixed/sticky elements. Send this when hiding misses something; selectors for
   `rules.json` come from it.
+- **Copy dump** copies only the last page dump (compact: unit selector counts, feed ancestry,
+  every element in the first posts' header strips with its visible text).
 - **Desktop site / Mobile site** switches the site for this session.
 - **Copy log** copies the whole log to the clipboard. Paste it into a note or message to
   yourself.

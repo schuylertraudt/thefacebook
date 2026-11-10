@@ -88,6 +88,14 @@
                     android:textColor="@color/debug_text" />
 
                 <Button
+                    android:id="@+id/copyDump"
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/copy_dump"
+                    android:textColor="@color/debug_text" />
+
+                <Button
                     android:id="@+id/siteToggle"
                     style="?android:attr/buttonBarButtonStyle"
                     android:layout_width="wrap_content"

@@ -65,6 +65,9 @@ class MainActivity : ComponentActivity() {
     /** One-shot command for inject.js, picked up by its 500 ms poll ("dump"). */
     @Volatile private var pendingCommand = ""
 
+    /** Last page dump from inject.js ("Copy dump"). */
+    @Volatile private var lastDump = ""
+
     /**
      * Addresses the current friends-feed document has rewritten itself to via replaceState
      * (e.g. "/"). Valid until the next full page load.
@@ -221,6 +224,15 @@ class MainActivity : ComponentActivity() {
         findViewById<Button>(R.id.dumpPage).setOnClickListener {
             pendingCommand = "dump"
             Toast.makeText(this, R.string.dumping, Toast.LENGTH_SHORT).show()
+        }
+        findViewById<Button>(R.id.copyDump).setOnClickListener {
+            if (lastDump.isEmpty()) {
+                Toast.makeText(this, R.string.no_dump, Toast.LENGTH_SHORT).show()
+            } else {
+                getSystemService(ClipboardManager::class.java)
+                    .setPrimaryClip(ClipData.newPlainText("Friendbook dump", lastDump))
+                Toast.makeText(this, R.string.dump_copied, Toast.LENGTH_SHORT).show()
+            }
         }
         findViewById<Button>(R.id.siteToggle).setOnClickListener {
             desktop = !desktop
@@ -527,6 +539,11 @@ class MainActivity : ComponentActivity() {
 
         @JavascriptInterface
         fun isDesktop(): Boolean = desktop
+
+        @JavascriptInterface
+        fun setDump(text: String) {
+            lastDump = text
+        }
 
         @JavascriptInterface
         fun takeCommand(): String {

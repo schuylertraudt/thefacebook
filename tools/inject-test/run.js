@@ -117,7 +117,7 @@ function check(name, ok, detail) {
   check('debug logs css vars', logs.some(l => l.startsWith('[css-vars]')), logs);
   await page.evaluate(() => { window.__cmd = 'dump'; });
   await page.waitForTimeout(1200);
-  check('dump page logs structure', logs.some(l => l.startsWith('[dump] auto feed container')) && logs.some(l => l.includes('label "Sponsored"')), logs.filter(l => l.startsWith('[dump]')).slice(0, 3));
+  check('dump page logs structure', logs.some(l => l.startsWith('[dump] ==== page dump') && l.includes('outer units') && l.includes('vis=')), logs.filter(l => l.startsWith('[dump]')).map(l => l.slice(0, 300)));
   await page.evaluate(() => history.pushState({}, '', '/reel/1'));
   await page.waitForTimeout(800);
   check('debug mode does not filter', page.url().endsWith('/reel/1'), page.url());
@@ -130,13 +130,15 @@ function check(name, ok, detail) {
   await page.waitForTimeout(900);
   const d = await page.evaluate(() => {
     const h = id => document.getElementById(id).getAttribute('data-fbk-hidden');
-    return { p1: h('p1'), p2: h('p2'), p3: h('p3'), p4: h('p4'), left: h('leftnav'), right: h('rightrail'),
+    return { p1: h('p1'), p2: h('p2'), p3: h('p3'), p4: h('p4'), p5: h('p5'), p6: h('p6'), left: h('leftnav'), right: h('rightrail'),
       feedWidth: Math.round(document.getElementById('feed').getBoundingClientRect().width) };
   });
   check('desktop: "Ad" in post header hidden', d.p2 === 'sponsored', d);
   check('desktop: aria-labelledby Sponsored hidden', d.p4 === 'sponsored', d);
   check('desktop: friend post mentioning "Dad" kept', d.p1 === null, d);
   check('desktop: "Ad" deep in post body (not header) kept', d.p3 === null, d);
+  check('desktop: "Ad" with hidden/positioned/transparent/zero-size decoys hidden', d.p5 === 'sponsored', d);
+  check('desktop: friend link reading "Dad" kept', d.p6 === null, d);
   check('desktop: left column hidden', d.left === 'layout:side-column', d);
   check('desktop: right rail hidden', d.right === 'layout:side-column', d);
   check('desktop: feed takes the width', d.feedWidth > 1000, d.feedWidth);

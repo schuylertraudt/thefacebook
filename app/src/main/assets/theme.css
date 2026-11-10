@@ -131,6 +131,22 @@ time {
   font-weight: normal !important;
 }
 
+/* Feed and its wrappers (tagged by inject.js) take the full width. */
+[data-fbk-feedpath] {
+  max-width: none !important;
+  width: auto !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  flex-grow: 1 !important;
+  flex-shrink: 1 !important;
+}
+[data-fbk-feedpath] > [data-fbk-unit],
+[data-fbk-feedpath] > div[aria-posinset],
+div[aria-posinset] > div {
+  max-width: none !important;
+  width: auto !important;
+}
+
 /* ---- 3. Shape --------------------------------------------------------------------- */
 
 body *:not(#friendbook-header) {

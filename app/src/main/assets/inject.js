@@ -314,23 +314,57 @@ function blockFor(el) {
 var unitMemo = new WeakMap();
 
 /**
+ * Text of el as a person sees it: characters in elements that are displayed, not
+ * transparent / zero-size / clipped away, and sitting on el's own line. Facebook hides
+ * decoy letters inside labels ("A<hidden x>d") with all of these tricks.
+ */
+function visibleText(el) {
+  var box = el.getBoundingClientRect();
+  if (!box.width || !box.height) return '';
+  var out = '';
+  var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+  for (var n = walker.nextNode(); n; n = walker.nextNode()) {
+    var p = n.parentElement;
+    if (!p || !n.nodeValue.trim()) continue;
+    var cs = getComputedStyle(p);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.visibility === 'collapse') continue;
+    if (parseFloat(cs.opacity) === 0 || parseFloat(cs.fontSize) === 0) continue;
+    if (cs.color === 'transparent' || /rgba\([^)]*,\s*0\)$/.test(cs.color)) continue;
+    var hidden = false;
+    for (var q = p; q && q !== el.parentElement; q = q.parentElement) {
+      var qs = q === p ? cs : getComputedStyle(q);
+      if (qs.display === 'none' || parseFloat(qs.opacity) === 0 || qs.visibility === 'hidden') { hidden = true; break; }
+    }
+    if (hidden) continue;
+    var range = document.createRange();
+    range.selectNodeContents(n);
+    var r = range.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    // Off the label's line (absolutely positioned decoys) or outside its box.
+    if (r.bottom <= box.top + 1 || r.top >= box.bottom - 1 || r.right <= box.left || r.left >= box.right) continue;
+    out += n.nodeValue;
+  }
+  return out;
+}
+
+/**
  * Does element `el` (with raw textContent `t`) read as a sponsored label?
  * 1. exact match on normalised textContent;
- * 2. label letters appear in order and the text is at most FUZZY_RATIO x longer
- *    (decoy letters interleaved into the label);
- * 3. exact match on innerText, which respects CSS and so drops decoys hidden with display:none.
+ * 2. exact match on the visible text (decoy letters removed);
+ * 3. labels of sponsoredFuzzyMinLength+ letters: label letters appear in order and the
+ *    text is at most FUZZY_RATIO x longer.
  */
 function sponsoredMatch(el, t) {
   var n = norm(t);
   if (!n) return false;
+  var vis = null;
   for (var i = 0; i < SPONSORED.length; i++) {
     var lab = SPONSORED[i];
     if (n === lab) return true;
-    // Short labels ("Ad") only match exactly: fuzzy matching would catch "Dad", "and"...
-    if (lab.length < FUZZY_MIN_LEN) continue;
     if (!isSubsequence(lab, n)) continue;
-    if (FUZZY_RATIO > 0 && n.length <= lab.length * FUZZY_RATIO) return true;
-    if (norm(el.innerText) === lab) return true;
+    if (vis === null) vis = norm(visibleText(el));
+    if (vis === lab) return true;
+    if (lab.length >= FUZZY_MIN_LEN && FUZZY_RATIO > 0 && n.length <= lab.length * FUZZY_RATIO) return true;
   }
   return false;
 }
@@ -386,6 +420,10 @@ function hideSideColumns() {
   if (!CFG.hideSideColumns) return;
   var anchor = feedAnchor();
   if (!anchor) return;
+  // Let the feed and every wrapper above it take the full width (see theme.css).
+  for (var w = anchor; w && w !== document.body; w = w.parentElement) {
+    if (!w.hasAttribute('data-fbk-feedpath')) w.setAttribute('data-fbk-feedpath', '');
+  }
   for (var a = anchor; a && a.parentElement && a !== document.body; a = a.parentElement) {
     var ar = a.getBoundingClientRect();
     if (!ar.width) continue;
@@ -651,10 +689,10 @@ function reportCssVars() {
   }
   var names = Object.keys(orig).sort();
   var colorish = /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i;
-  log('css-vars', names.length + ' custom properties defined by the page (* = overridden by theme.css, c = color)\n' +
-    names.map(function (n) {
-      return '  ' + (themed[n] ? '*' : ' ') + (colorish.test(orig[n]) ? 'c ' : '  ') + n + ': ' + orig[n];
-    }).join('\n'));
+  var todo = names.filter(function (n) { return !themed[n] && colorish.test(orig[n]); });
+  log('css-vars', names.length + ' custom properties on the page, ' + Object.keys(themed).length +
+    ' overridden by theme.css, ' + todo.length + ' color variables not themed' +
+    (todo.length ? ' (first 40):\n' + todo.slice(0, 40).map(function (n) { return '  ' + n + ': ' + orig[n]; }).join('\n') : ''));
 }
 
 // ---------------------------------------------------------------------------------------
@@ -729,35 +767,58 @@ function findLabel(label) {
 
 function dumpPage() {
   if (!document.body) return;
-  log('dump', '==== page dump: ' + location.href + '\nviewport ' + innerWidth + 'x' + innerHeight +
-    '  fonts: ' + (pageFonts || '(none)'));
-  log('dump', 'body tree (3 levels):\n' + tree(document.body, 3, '  '));
+  var out = [];
+  out.push('==== page dump ' + location.href);
+  out.push('viewport ' + innerWidth + 'x' + innerHeight + ' debug=' + debugCache);
+  list(CFG.feedUnitSelectors).concat(['[' + AUTO_UNIT_ATTR + ']']).forEach(function (sel) {
+    var c = 0; try { c = document.querySelectorAll(sel).length; } catch (e) {}
+    out.push('selector ' + sel + ' -> ' + c);
+  });
   autoCheckedAt = 0;
   autoMarkUnits();
-  if (autoContainer) {
-    var units = autoContainer.querySelectorAll(':scope > [' + AUTO_UNIT_ATTR + ']');
-    log('dump', 'auto feed container (' + units.length + ' units):\n' + ancestry(autoContainer, 12));
-    for (var i = 0; i < Math.min(units.length, 4); i++) {
-      log('dump', 'unit ' + i + ' (4 levels):\n' + tree(units[i], 4, '  '));
+  out.push('auto container: ' + (autoContainer ? describe(autoContainer) : 'none'));
+  var anchor = feedAnchor();
+  if (anchor) out.push('feed anchor ancestry:\n' + ancestry(anchor, 14));
+  // Outermost units, first 4: every element in the header strip with its visible text.
+  var units = [].slice.call(UNIT_SEL ? document.querySelectorAll(UNIT_SEL) : []).filter(function (u) {
+    return unitOf(u) === u;
+  });
+  out.push('outer units: ' + units.length);
+  units.slice(0, 4).forEach(function (u, i) {
+    out.push('-- unit ' + i + ': ' + describe(u));
+    var top = u.getBoundingClientRect().top;
+    var els = u.querySelectorAll('a,span,[aria-label],[aria-labelledby],use,svg,b,strong,h2,h3,h4');
+    var shown = 0;
+    for (var k = 0; k < els.length && shown < 22; k++) {
+      var el = els[k];
+      var r = el.getBoundingClientRect();
+      if (r.top - top > 170 || (!r.width && !r.height)) continue;
+      var t = (el.textContent || '').trim();
+      var interesting = el.hasAttribute('aria-label') || el.hasAttribute('aria-labelledby') ||
+        el.tagName === 'use' || (t && t.length <= 30);
+      if (!interesting) continue;
+      var line = '   ' + describe(el).slice(0, 170);
+      if (t && t.length <= 30) line += ' vis=' + JSON.stringify(visibleText(el));
+      var lb = el.getAttribute('aria-labelledby');
+      if (lb) line += ' labelledby->' + lb.split(/\s+/).map(function (id) {
+        var e = document.getElementById(id); return e ? JSON.stringify((e.textContent || '').slice(0, 30)) : '?';
+      }).join(',');
+      if (el.tagName === 'use') line += ' href=' + (el.getAttribute('href') || el.getAttribute('xlink:href'));
+      out.push(line);
+      shown++;
     }
-  } else {
-    log('dump', 'no auto feed container found');
-  }
-  var labels = SPONSORED.length ? list(labels_raw.sponsored) : [];
-  labels = labels.concat(list(labels_raw.sections), list(labels_raw.feedOnly), list(CFG.dumpLabels));
-  labels.forEach(function (l) {
-    findLabel(l).forEach(function (el, n) {
-      log('dump', 'label "' + l + '" #' + n + ':\n' + ancestry(el, 30));
-    });
   });
   var fixed = [];
   var all = document.body.getElementsByTagName('*');
-  for (var j = 0; j < all.length && fixed.length < 15; j++) {
+  for (var j = 0; j < all.length && fixed.length < 8; j++) {
     var p = getComputedStyle(all[j]).position;
-    if (p === 'fixed' || p === 'sticky') fixed.push('  ' + describe(all[j]));
+    if (p === 'fixed' || p === 'sticky') fixed.push('  ' + describe(all[j]).slice(0, 160));
   }
-  log('dump', 'fixed/sticky elements:\n' + (fixed.join('\n') || '  (none)'));
-  log('dump', '==== end of dump');
+  out.push('fixed/sticky:\n' + (fixed.join('\n') || '  none'));
+  out.push('==== end of dump');
+  var text = out.join('\n');
+  try { NATIVE.setDump(text); } catch (e) {}
+  log('dump', text);
 }
 
 // ---------------------------------------------------------------------------------------

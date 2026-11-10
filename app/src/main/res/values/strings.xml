@@ -11,6 +11,9 @@
     <string name="log_copied">Log copied</string>
     <string name="dump_page">Dump page</string>
     <string name="dumping">Dumping page structure to the log…</string>
+    <string name="copy_dump">Copy dump</string>
+    <string name="dump_copied">Dump copied</string>
+    <string name="no_dump">Tap Dump page first</string>
     <string name="desktop_site">Desktop site</string>
     <string name="mobile_site">Mobile site</string>
     <string name="no_browser">No app can open this link</string>
