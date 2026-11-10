@@ -58,6 +58,25 @@ class UrlRulesTest {
         assertAllowed("https://m.facebook.com/two_step_verification/two_factor/")
     }
 
+    @Test fun loggedOutLoginRedirectIsAllowed() {
+        // Observed: logged out, the feed URL 302s here.
+        assertAllowed(
+            "https://m.facebook.com/unified/login_via/app/?filter=friends&sk=h_chr&lid=abc" +
+                "&lva_id=51110afe&bn=Y29tLmFuZHJvaWQuY2hyb21l&wtsid=rdr_xyz"
+        )
+        assertAllowed(rules.loginUrl)
+    }
+
+    @Test fun sessionCookieDetection() {
+        assertTrue(rules.hasSession("datr=abc; c_user=100001234567890; xs=1%3Aabc"))
+        assertTrue(rules.hasSession("c_user=1"))
+        assertFalse(rules.hasSession("datr=abc; fr=xyz"))
+        assertFalse(rules.hasSession("c_user=; datr=abc"))
+        assertFalse(rules.hasSession("xc_user=1"))
+        assertFalse(rules.hasSession(null))
+        assertEquals("https://m.facebook.com", rules.sessionCookieUrl)
+    }
+
     // --- home root ------------------------------------------------------------------
 
     @Test fun homeRootIsBlocked() {

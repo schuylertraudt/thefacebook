@@ -25,11 +25,12 @@ echo "sdk.dir=$HOME/Android/Sdk" > local.properties      # macOS: $HOME/Library/
 ./gradlew assembleDebug         # -> app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Optional desktop test of `inject.js` / `theme.css` against a fake feed page (needs Node and
-Playwright with Chromium):
+Optional desktop tests (need Node and Playwright with Chromium):
 
 ```sh
-node tools/inject-test/run.js
+node tools/inject-test/run.js   # inject.js + theme.css against a fake feed page (asserts)
+node tools/live-test/run.js     # REAL logged-out m.facebook.com with the app's policy simulated
+                                # prints the navigation log, writes live.png
 ```
 
 ## Install
@@ -62,7 +63,12 @@ you out.
 
 ## How it works
 
-- **Launch**: loads `friendsFeedUrl` directly. The Home feed is never loaded.
+- **Launch**: loads `friendsFeedUrl` directly when logged in, `loginUrl` when not. The Home
+  feed is never loaded.
+- **Logged out** (no `sessionCookie` cookie): allow/block rules are not enforced. Facebook
+  serves the login form at `/`, `/login/` and `/unified/login_via/app/…` interchangeably, and
+  logged-out sessions can only reach login pages. Once the cookie exists, rules apply, so
+  Facebook's post-login landing on `/` is redirected to the friends feed.
 - **Session**: cookies are accepted (including third-party) and flushed on pause.
 - **User agent**: the default WebView UA with every string in `uaRemoveTokens` (`"; wv"`)
   removed.
@@ -84,8 +90,9 @@ you out.
   - native: `shouldOverrideUrlLoading`, `onPageStarted`, `doUpdateVisitedHistory`
   - injected JS: wrapped `history.pushState`/`replaceState`, `popstate`, `hashchange`,
     and a 500 ms `location.href` poll. Blocked → `location.replace(friendsFeedUrl)`.
-  - If the feed keeps bouncing to blocked URLs (more than 4 redirects in 10 s), or the page
-    fails to load, a native error screen with **Retry** is shown.
+  - Every blocked navigation is redirected (no de-duplication). If the start page keeps
+    bouncing to blocked URLs (more than 6 redirects in 10 s), or the page fails to load, a
+    native error screen with **Retry** is shown.
 - **Network**: sub-resource requests to hosts not in `resourceHosts` are answered locally
   with 403 (no analytics or third-party calls). No data is stored besides WebView cookies
   and cache; the debug log is memory-only.
@@ -99,7 +106,12 @@ you out.
     normalized text, on `aria-label`, on `innerText` (which drops letters hidden with
     `display:none`), and fuzzily: the label's letters in order inside a string at most
     `sponsoredFuzzyRatio`× its length (decoy letters mixed in)
-  - blocks headed by `hideLabels.sections` (all pages) or `hideLabels.feedOnly` (feed only)
+  - blocks headed by `hideLabels.sections` (all pages) or `hideLabels.feedOnly` (feed only).
+    From the label the script climbs to the largest wrapper that has no feed units, no form
+    fields it didn't already contain, less than `sectionClimbMaxText` characters and less
+    than 60% of the viewport height.
+  - Safety: nothing containing `role=main` / `role=feed` / `<main>` or more than 60% of the
+    page's text is ever hidden; refusals are logged as `[hide-refused]` in debug mode.
   - everything in `hideSelectors` (stories tray, Facebook's own bars)
 - **Theme**: `theme.css` is injected as a `<style>` and kept last in `<head>` after every
   SPA navigation. Light mode is forced via `color-scheme`, the `forceLightMode` class swap,

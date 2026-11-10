@@ -95,7 +95,9 @@ function enforce(url, source) {
   try { verdict = NATIVE.checkUrl(url, source); } catch (e) {}
   if (verdict === 'block') {
     redirecting = true;
-    location.replace(FEED_URL);
+    var target = FEED_URL;
+    try { target = NATIVE.redirectTarget() || FEED_URL; } catch (e) {}
+    location.replace(target);
     return false;
   }
   if (verdict === 'stop') { redirecting = true; return false; }
@@ -231,9 +233,33 @@ function isOurs(el) {
   return h && (el === h || h.contains(el) || el.contains(h));
 }
 
+/**
+ * Never hide the page itself: refuse elements that contain the main region / feed, or most
+ * of the page's text. A broad label or selector match then degrades to "not hidden"
+ * instead of a blank screen.
+ */
+function tooBigToHide(el) {
+  if (el.querySelector('[role="main"],[role="feed"],main')) return true;
+  if (el.matches('[role="main"],[role="feed"],main')) return true;
+  var header = document.getElementById(HEADER_ID);
+  var total = (document.body.textContent || '').length - (header ? (header.textContent || '').length : 0);
+  return total > 0 && (el.textContent || '').length > total * 0.6;
+}
+
+var refusedLogged = typeof WeakSet === 'function' ? new WeakSet() : null;
+
 function hide(el, reason) {
   if (!el || el === document.body || el === document.documentElement) return;
   if (isOurs(el)) return;
+  if (el.hasAttribute(HIDDEN_ATTR)) return;
+  if (tooBigToHide(el)) {
+    if (refusedLogged && !refusedLogged.has(el)) {
+      refusedLogged.add(el);
+      log('hide-refused', reason + ' matched <' + el.tagName.toLowerCase() +
+        (el.id ? '#' + el.id : '') + '> containing the main page; not hidden');
+    }
+    return;
+  }
   if (!el.hasAttribute(HIDDEN_ATTR)) el.setAttribute(HIDDEN_ATTR, reason);
 }
 
@@ -257,12 +283,18 @@ function blockFor(el) {
   var unit = unitOf(el);
   if (unit) return unit;
   var cur = el;
+  var FORM = 'input,textarea,select,[contenteditable="true"]';
+  var curHasForm = !!cur.querySelector(FORM);
+  var maxHeight = (window.innerHeight || 800) * 0.6;
   for (var depth = 0; depth < 12; depth++) {
     var p = cur.parentElement;
     if (!p || p === document.body || p === document.documentElement) break;
     if (p.matches('[role="feed"],[role="main"],main')) break;
     if (UNIT_SEL && p.querySelector(UNIT_SEL)) break;
     if ((p.textContent || '').length > CLIMB_MAX_TEXT) break;
+    // Don't swallow forms (login, composer) or anything most of a screen tall.
+    if (!curHasForm && p.querySelector(FORM)) break;
+    if (p.getBoundingClientRect().height > maxHeight) break;
     cur = p;
   }
   return cur;

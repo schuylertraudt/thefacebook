@@ -77,6 +77,11 @@ data class ParsedUrl(
  */
 class UrlRules(
     val friendsFeedUrl: String,
+    /** Where to go while logged out. Defaults to the feed URL. */
+    val loginUrl: String = friendsFeedUrl,
+    /** Cookie whose presence (for [sessionCookieUrl]) means "logged in". Empty = always logged in. */
+    val sessionCookieUrl: String = "",
+    val sessionCookieName: String = "",
     private val internalHosts: List<Regex>,
     private val openHosts: List<Regex>,
     private val linkShimHosts: List<Regex>,
@@ -126,6 +131,16 @@ class UrlRules(
         return Verdict(Decision.BLOCK, "default", url)
     }
 
+    /** Whether a Cookie header value (as from CookieManager.getCookie) contains the session cookie. */
+    fun hasSession(cookieHeader: String?): Boolean {
+        if (sessionCookieName.isEmpty()) return true
+        if (cookieHeader.isNullOrEmpty()) return false
+        return cookieHeader.split(';').any { part ->
+            val kv = part.trim()
+            kv.substringBefore('=') == sessionCookieName && kv.substringAfter('=', "").isNotEmpty()
+        }
+    }
+
     fun isInternalHost(host: String): Boolean = internalHosts.any { it.containsMatchIn(host) }
 
     /** True if [url] is the friends feed (any internal host, same path, all feed query params present). */
@@ -152,8 +167,13 @@ class UrlRules(
         fun fromJson(text: String): UrlRules {
             val o = JSONObject(text)
             val shim = o.optJSONObject("linkShim")
+            val session = o.optJSONObject("sessionCookie")
+            val feedUrl = o.getString("friendsFeedUrl")
             return UrlRules(
-                friendsFeedUrl = o.getString("friendsFeedUrl"),
+                friendsFeedUrl = feedUrl,
+                loginUrl = o.optString("loginUrl", "").ifEmpty { feedUrl },
+                sessionCookieUrl = session?.optString("url", "") ?: "",
+                sessionCookieName = session?.optString("name", "") ?: "",
                 internalHosts = regexes(o.optJSONArray("internalHosts")),
                 openHosts = regexes(o.optJSONArray("openHosts")),
                 linkShimHosts = regexes(shim?.optJSONArray("hosts")),

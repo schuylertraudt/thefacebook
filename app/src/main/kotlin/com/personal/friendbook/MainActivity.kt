@@ -60,9 +60,7 @@ class MainActivity : ComponentActivity() {
     @Volatile private var pageAtTop = true
 
     // Redirect bookkeeping, shared between the UI thread and the JS bridge thread.
-    private val redirectLock = Any()
-    private var lastRedirectAt = 0L
-    private val recentRedirects = ArrayDeque<Long>()
+    private val redirectGuard = RedirectGuard()
 
     private val loggedResourceHosts: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
@@ -189,7 +187,7 @@ class MainActivity : ComponentActivity() {
 
     private fun setupErrorView() {
         findViewById<Button>(R.id.retry).setOnClickListener {
-            synchronized(redirectLock) { recentRedirects.clear() }
+            redirectGuard.reset()
             errorView.visibility = View.GONE
             loadFeed()
         }
@@ -204,8 +202,25 @@ class MainActivity : ComponentActivity() {
     // Navigation policy
     // ---------------------------------------------------------------------------------
 
+    private fun isLoggedIn(): Boolean {
+        if (rules.sessionCookieUrl.isEmpty()) return true
+        return rules.hasSession(CookieManager.getInstance().getCookie(rules.sessionCookieUrl))
+    }
+
+    /**
+     * URL rules are enforced only when debug mode is off AND a session exists. While logged
+     * out Facebook moves the login form between /, /login/ and /unified/login_via/..., and
+     * nothing but login pages is reachable anyway.
+     */
+    private fun filtering(): Boolean = !debug && isLoggedIn()
+
+    /** Friends feed when logged in, the login page otherwise. Safe to call from any thread. */
+    private fun startUrl(): String = if (isLoggedIn()) rules.friendsFeedUrl else rules.loginUrl
+
     private fun loadFeed() {
-        webView.loadUrl(rules.friendsFeedUrl)
+        val url = startUrl()
+        if (debug) DebugLog.add("nav", "load ${if (url == rules.friendsFeedUrl) "feed" else "login (no session cookie)"} $url")
+        webView.loadUrl(url)
     }
 
     private fun setDebug(on: Boolean) {
@@ -220,7 +235,7 @@ class MainActivity : ComponentActivity() {
         } else {
             // Re-apply filtering to wherever we are now.
             webView.url?.let { url ->
-                if (rules.classify(url).decision == Decision.BLOCK) redirectToFeed()
+                if (filtering() && rules.classify(url).decision == Decision.BLOCK) redirectToFeed()
             }
         }
     }
@@ -228,7 +243,8 @@ class MainActivity : ComponentActivity() {
     private fun logNav(source: String, v: Verdict, url: String) {
         if (!debug) return
         val extra = if (v.target != url) " -> ${v.target}" else ""
-        DebugLog.add(source, "${v.decision} [${v.reason}] $url$extra")
+        val session = if (isLoggedIn()) "" else " (logged out: not enforced)"
+        DebugLog.add(source, "${v.decision} [${v.reason}] $url$extra$session")
     }
 
     /**
@@ -248,7 +264,7 @@ class MainActivity : ComponentActivity() {
                 val isWeb = url.startsWith("http://") || url.startsWith("https://")
                 when {
                     !isWeb -> true // fb://, intent:// ... never load, never hand to the FB app.
-                    debug -> false
+                    !filtering() -> false
                     else -> {
                         redirectToFeed()
                         true
@@ -258,36 +274,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /**
-     * Records a block-redirect. Returns false if one was recorded very recently (another
-     * path is already redirecting). Trips the loop guard if the feed keeps bouncing.
-     */
-    private fun noteRedirect(): RedirectState {
-        val now = SystemClock.elapsedRealtime()
-        synchronized(redirectLock) {
-            if (now - lastRedirectAt < REDIRECT_DEDUPE_MS) return RedirectState.DUPLICATE
-            lastRedirectAt = now
-            recentRedirects.addLast(now)
-            while (recentRedirects.isNotEmpty() && now - recentRedirects.first() > LOOP_WINDOW_MS) {
-                recentRedirects.removeFirst()
-            }
-            return if (recentRedirects.size > LOOP_MAX_REDIRECTS) RedirectState.LOOP else RedirectState.OK
-        }
-    }
-
+    /** Sends a blocked navigation to the start URL, unless the start URL itself keeps bouncing. */
     private fun redirectToFeed() {
-        when (noteRedirect()) {
-            RedirectState.DUPLICATE -> Unit
-            RedirectState.LOOP -> showLoopError()
-            RedirectState.OK -> loadFeed()
-        }
+        if (redirectGuard.allow(SystemClock.elapsedRealtime())) loadFeed() else showLoopError()
     }
 
     private fun showLoopError() {
         webView.stopLoading()
-        DebugLog.add("error", "redirect loop: friendsFeedUrl keeps landing on blocked URLs")
+        DebugLog.add("error", "redirect loop: ${startUrl()} keeps landing on blocked URLs")
         showError(
-            "The friends feed keeps redirecting to a blocked page.\n" +
+            "The start page keeps redirecting to a blocked page.\n" +
                 "Long-press the title above to enable debug mode and check friendsFeedUrl."
         )
     }
@@ -331,7 +327,7 @@ class MainActivity : ComponentActivity() {
                     if (view.canGoBack()) view.goBack() else loadFeed()
                     return
                 }
-                v.decision == Decision.BLOCK && !debug -> {
+                v.decision == Decision.BLOCK && filtering() -> {
                     view.stopLoading()
                     redirectToFeed()
                     return
@@ -349,7 +345,7 @@ class MainActivity : ComponentActivity() {
             // Catches SPA (pushState) changes too; backstop for inject.js.
             val v = rules.classify(url)
             logNav("native:history", v, url)
-            if (v.decision == Decision.BLOCK && !debug &&
+            if (v.decision == Decision.BLOCK && filtering() &&
                 (url.startsWith("https://") || url.startsWith("http://"))
             ) {
                 redirectToFeed()
@@ -446,6 +442,10 @@ class MainActivity : ComponentActivity() {
             return u.scheme == "https" && rules.isInternalHost(u.host)
         }
 
+        /** Where inject.js sends a blocked SPA navigation. */
+        @JavascriptInterface
+        fun redirectTarget(): String = startUrl()
+
         @JavascriptInterface
         fun isFriendsFeed(url: String): Boolean = rules.isFriendsFeed(url)
 
@@ -458,13 +458,12 @@ class MainActivity : ComponentActivity() {
                 Decision.ALLOW -> "allow"
                 Decision.EXTERNAL -> "external"
                 Decision.BLOCK -> {
-                    if (debug) return "allow"
-                    when (noteRedirect()) {
-                        RedirectState.LOOP -> {
-                            runOnUiThread { showLoopError() }
-                            "stop"
-                        }
-                        else -> "block"
+                    if (!filtering()) return "allow"
+                    if (redirectGuard.allow(SystemClock.elapsedRealtime())) {
+                        "block"
+                    } else {
+                        runOnUiThread { showLoopError() }
+                        "stop"
                     }
                 }
             }
@@ -506,12 +505,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
-    private enum class RedirectState { OK, DUPLICATE, LOOP }
-
     companion object {
         const val BRIDGE_NAME = "FriendbookNative"
-        private const val REDIRECT_DEDUPE_MS = 1500L
-        private const val LOOP_WINDOW_MS = 10_000L
-        private const val LOOP_MAX_REDIRECTS = 4
     }
 }

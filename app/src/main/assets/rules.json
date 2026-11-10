@@ -3,6 +3,10 @@
 
   "friendsFeedUrl": "https://m.facebook.com/?filter=friends&sk=h_chr",
 
+  "_login": "While the session cookie is missing the app starts at loginUrl and allow/block rules are NOT enforced (Facebook moves the login form between /, /login/ and /unified/login_via/). Rules apply as soon as the cookie exists.",
+  "loginUrl": "https://m.facebook.com/login/",
+  "sessionCookie": { "url": "https://m.facebook.com", "name": "c_user" },
+
   "internalHosts": [
     "^([a-z0-9-]+\\.)*facebook\\.com$"
   ],
@@ -70,6 +74,7 @@
     "^/a/",
     "^/composer(/|\\?|$)",
     "^/login(\\.php)?(/|\\?|$)",
+    "^/unified/login_via/",
     "^/checkpoint(/|\\?|$)",
     "^/two_step_verification(/|\\?|$)",
     "^/two_factor(/|\\?|$)",
@@ -93,7 +98,8 @@
       "Reels",
       "Reels and short videos",
       "Stories",
-      "Create story"
+      "Create story",
+      "Get Facebook for Android and browse faster."
     ],
     "_feedOnly": "Like sections, but only applied on the friends feed (these words appear legitimately on profiles).",
     "feedOnly": ["Follow", "Join", "Join group"]

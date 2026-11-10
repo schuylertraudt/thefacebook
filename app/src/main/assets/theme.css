@@ -158,9 +158,9 @@ form[action*="comment"],
   background: #f7f7f7 !important;
 }
 
-input,
-textarea,
-[contenteditable="true"] {
+/* Only inside posts/comments: Facebook's login form draws its own field frames. */
+[role="article"] textarea,
+[role="article"] [contenteditable="true"] {
   border: 1px solid #bdc7d8 !important;
   background: #fff !important;
 }
