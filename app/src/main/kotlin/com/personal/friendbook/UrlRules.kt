@@ -102,6 +102,7 @@ class UrlRules(
     /** Load the desktop site (www) with [desktopUserAgent] instead of the mobile site. */
     val desktopMode: Boolean = false,
     val desktopUserAgent: String = "",
+    val desktopHost: String = "",
 ) {
     private val feed: ParsedUrl = requireNotNull(ParsedUrl.parse(friendsFeedUrl)) {
         "friendsFeedUrl is not a valid URL: $friendsFeedUrl"
@@ -151,6 +152,13 @@ class UrlRules(
     }
 
     fun isInternalHost(host: String): Boolean = internalHosts.any { it.containsMatchIn(host) }
+
+    /** [url] with its host replaced by [host] (scheme, path, query kept). */
+    fun withHost(url: String, host: String): String {
+        if (host.isEmpty()) return url
+        val m = Regex("^([a-zA-Z][a-zA-Z0-9+.-]*://)([^/?#]*)(.*)$").matchEntire(url) ?: return url
+        return m.groupValues[1] + host + m.groupValues[3]
+    }
 
     /** True if [url] is an address the friends-feed document may rewrite itself to (see feedCanonical). */
     fun isFeedCanonical(url: String): Boolean {
@@ -204,6 +212,7 @@ class UrlRules(
                 feedCanonical = regexes(o.optJSONArray("friendsFeedCanonical")),
                 desktopMode = o.optBoolean("desktopMode", false),
                 desktopUserAgent = o.optString("desktopUserAgent", ""),
+                desktopHost = o.optString("desktopHost", ""),
             )
         }
 

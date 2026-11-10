@@ -88,9 +88,20 @@ class UrlRulesTest {
         assertBlocked("https://m.facebook.com/")
     }
 
-    @Test fun desktopModeDefaultsOff() {
-        assertFalse(rules.desktopMode)
+    @Test fun desktopModeSettings() {
+        // On by default: m.facebook.com ignores filter=friends and serves the Home feed.
+        assertTrue(rules.desktopMode)
         assertTrue(rules.desktopUserAgent.contains("Windows"))
+        assertEquals("www.facebook.com", rules.desktopHost)
+    }
+
+    @Test fun withHostSwapsOnlyTheHost() {
+        assertEquals(
+            "https://www.facebook.com/?filter=friends&sk=h_chr",
+            rules.withHost("https://m.facebook.com/?filter=friends&sk=h_chr", "www.facebook.com"),
+        )
+        assertEquals("https://www.facebook.com/login/", rules.withHost("https://m.facebook.com/login/", "www.facebook.com"))
+        assertTrue(rules.isFriendsFeed(rules.withHost(rules.friendsFeedUrl, rules.desktopHost)))
     }
 
     // --- home root ------------------------------------------------------------------

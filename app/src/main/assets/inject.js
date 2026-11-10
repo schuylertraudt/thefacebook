@@ -71,10 +71,12 @@ function isSubsequence(needle, hay) {
 function list(v) { return Array.isArray(v) ? v : []; }
 
 var labels = CFG.hideLabels || {};
+var labels_raw = labels;
 var SPONSORED = list(labels.sponsored).map(norm).filter(Boolean);
 var SECTIONS = list(labels.sections).map(norm).filter(Boolean);
 var FEED_ONLY = list(labels.feedOnly).map(norm).filter(Boolean);
-var UNIT_SEL = list(CFG.feedUnitSelectors).join(',');
+var AUTO_UNIT_ATTR = 'data-fbk-unit';
+var UNIT_SEL = list(CFG.feedUnitSelectors).concat(CFG.autoFeedUnits === false ? [] : ['[' + AUTO_UNIT_ATTR + ']']).join(',');
 var NAME_SEL = list(CFG.nameSelectors).join(',');
 var FUZZY_RATIO = +CFG.sponsoredFuzzyRatio || 0;
 var CLIMB_MAX_TEXT = +CFG.sectionClimbMaxText || 2500;
@@ -346,6 +348,103 @@ function unitIsSponsored(unit) {
   return false;
 }
 
+// ---------------------------------------------------------------------------------------
+// Automatic feed-unit detection: the element with the most "post-like" children (text +
+// media) is the feed list; its children are marked as units. Works without knowing
+// Facebook's markup, so label-based hiding applies to every post.
+// ---------------------------------------------------------------------------------------
+
+var autoContainer = null;
+var autoCheckedAt = 0;
+
+function postLike(child) {
+  if (child.id === HEADER_ID) return false;
+  var t = child.textContent;
+  if (!t || t.length < 60) return false;
+  return !!child.querySelector('img,video,svg image,[style*="background-image"]');
+}
+
+function findFeedContainer() {
+  var best = null, bestScore = 2;
+  var cands = document.body.querySelectorAll('div,section,main,ul,article');
+  for (var i = 0; i < cands.length; i++) {
+    var c = cands[i];
+    if (c.childElementCount < 4) continue;
+    var score = 0;
+    for (var k = c.firstElementChild; k; k = k.nextElementSibling) if (postLike(k)) score++;
+    // ">=": on ties prefer the later (deeper) element, i.e. the actual list, not a wrapper.
+    if (score >= bestScore) { best = c; bestScore = score; }
+  }
+  return best;
+}
+
+function autoMarkUnits() {
+  if (CFG.autoFeedUnits === false || !document.body) return;
+  var now = Date.now();
+  if (!autoContainer || !autoContainer.isConnected || now - autoCheckedAt > 5000) {
+    autoCheckedAt = now;
+    var c = findFeedContainer();
+    if (c !== autoContainer) {
+      autoContainer = c;
+      if (c) log('feed-units', 'auto container: ' + describe(c));
+    }
+  }
+  if (!autoContainer) return;
+  for (var k = autoContainer.firstElementChild; k; k = k.nextElementSibling) {
+    if (!k.hasAttribute(AUTO_UNIT_ATTR) && postLike(k)) k.setAttribute(AUTO_UNIT_ATTR, '');
+  }
+}
+
+// ---------------------------------------------------------------------------------------
+// Fonts: our font stack replaces Facebook's on every element. Facebook draws icons as
+// private-use characters of its own web font, so the page's web fonts are appended as
+// per-glyph fallbacks (--fbk-page-fonts, used in theme.css).
+// ---------------------------------------------------------------------------------------
+
+var pageFonts = '';
+function updatePageFonts() {
+  if (!document.fonts || !document.documentElement) return;
+  var fams = {};
+  try {
+    document.fonts.forEach(function (f) {
+      var n = (f.family || '').replace(/^["']|["']$/g, '').trim();
+      if (n) fams[n] = 1;
+    });
+  } catch (e) { return; }
+  var names = Object.keys(fams).sort();
+  var css = names.map(function (n) { return '"' + n.replace(/["\\]/g, '') + '"'; }).join(', ');
+  if (css && css !== pageFonts) {
+    pageFonts = css;
+    document.documentElement.style.setProperty('--fbk-page-fonts', css);
+    log('fonts', 'page web fonts used as glyph fallbacks: ' + names.join(', '));
+  }
+}
+if (document.fonts && document.fonts.addEventListener) {
+  document.fonts.addEventListener('loadingdone', safe(updatePageFonts));
+}
+
+// ---------------------------------------------------------------------------------------
+// Desktop site: render the desktop layout at a fixed CSS width, scaled to the screen.
+// ---------------------------------------------------------------------------------------
+
+function ensureViewport() {
+  var desktop = false;
+  try { desktop = !!NATIVE.isDesktop(); } catch (e) {}
+  if (!desktop || !document.head) return;
+  var w = +CFG.desktopViewportWidth || 600;
+  var want = 'width=' + w;
+  var metas = document.head.querySelectorAll('meta[name="viewport"]');
+  var ours = document.getElementById('friendbook-viewport');
+  for (var i = 0; i < metas.length; i++) if (metas[i] !== ours) metas[i].remove();
+  if (!ours) {
+    ours = document.createElement('meta');
+    ours.id = 'friendbook-viewport';
+    ours.name = 'viewport';
+    document.head.appendChild(ours);
+  }
+  if (ours.content !== want) ours.content = want;
+}
+
 function hideSponsored() {
   if (!UNIT_SEL || !SPONSORED.length) return;
   var units = document.querySelectorAll(UNIT_SEL);
@@ -506,6 +605,109 @@ function reportCssVars() {
 }
 
 // ---------------------------------------------------------------------------------------
+// Page structure dump (debug panel "Dump page"): enough of the DOM around feed units,
+// labels and fixed bars to write selectors for rules.json.
+// ---------------------------------------------------------------------------------------
+
+var DESCRIBE_ATTRS = ['role', 'aria-label', 'data-pagelet', 'data-mcomponent', 'data-type',
+  'data-tracking-duration-id', 'data-sigil', 'data-store', 'data-focusable', AUTO_UNIT_ATTR, HIDDEN_ATTR];
+
+function describe(el) {
+  if (!el || !el.tagName) return String(el);
+  var s = el.tagName.toLowerCase();
+  if (el.id) s += '#' + el.id;
+  var others = [];
+  for (var i = 0; i < el.attributes.length; i++) {
+    var a = el.attributes[i];
+    if (DESCRIBE_ATTRS.indexOf(a.name) >= 0) {
+      s += '[' + a.name + (a.value ? '=' + JSON.stringify(a.value.slice(0, 40)) : '') + ']';
+    } else if (a.name.indexOf('data-') === 0 || a.name.indexOf('aria-') === 0) {
+      others.push(a.name);
+    }
+  }
+  if (others.length) s += ' {' + others.join(' ') + '}';
+  var cls = (el.getAttribute('class') || '').trim();
+  if (cls) s += ' .' + cls.split(/\s+/).length + 'cls';
+  try {
+    var cs = getComputedStyle(el);
+    if (cs.position === 'fixed' || cs.position === 'sticky') s += ' pos=' + cs.position;
+    if (cs.fontFamily && el.childElementCount === 0) s += ' font=' + cs.fontFamily.slice(0, 40);
+  } catch (e) {}
+  var r = el.getBoundingClientRect();
+  s += ' kids=' + el.childElementCount + ' ' + Math.round(r.width) + 'x' + Math.round(r.height);
+  var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
+  if (t) s += ' "' + t.slice(0, 50) + (t.length > 50 ? '…' : '') + '"(' + t.length + ')';
+  return s;
+}
+
+function ancestry(el, max) {
+  var lines = [];
+  for (var cur = el, d = 0; cur && cur !== document.documentElement && d < (max || 30); cur = cur.parentElement, d++) {
+    lines.push('    ' + d + ' ' + describe(cur));
+  }
+  return lines.join('\n');
+}
+
+function tree(el, depth, indent) {
+  var out = indent + describe(el);
+  if (depth <= 0) return out;
+  var n = 0;
+  for (var k = el.firstElementChild; k && n < 12; k = k.nextElementSibling, n++) {
+    out += '\n' + tree(k, depth - 1, indent + '  ');
+  }
+  if (el.childElementCount > 12) out += '\n' + indent + '  … ' + (el.childElementCount - 12) + ' more';
+  return out;
+}
+
+function findLabel(label) {
+  var want = norm(label);
+  var found = [];
+  var els = document.body.querySelectorAll('span,div,a,h1,h2,h3,h4,strong,b,button,[aria-label]');
+  for (var i = 0; i < els.length && found.length < 2; i++) {
+    var el = els[i];
+    var aria = el.getAttribute('aria-label');
+    if (aria && norm(aria) === want) { found.push(el); continue; }
+    if (el.childElementCount > 3) continue;
+    var t = el.textContent;
+    if (t && t.length <= label.length + 12 && norm(t) === want) found.push(el);
+  }
+  return found;
+}
+
+function dumpPage() {
+  if (!document.body) return;
+  log('dump', '==== page dump: ' + location.href + '\nviewport ' + innerWidth + 'x' + innerHeight +
+    '  fonts: ' + (pageFonts || '(none)'));
+  log('dump', 'body tree (3 levels):\n' + tree(document.body, 3, '  '));
+  autoCheckedAt = 0;
+  autoMarkUnits();
+  if (autoContainer) {
+    var units = autoContainer.querySelectorAll(':scope > [' + AUTO_UNIT_ATTR + ']');
+    log('dump', 'auto feed container (' + units.length + ' units):\n' + ancestry(autoContainer, 12));
+    for (var i = 0; i < Math.min(units.length, 4); i++) {
+      log('dump', 'unit ' + i + ' (4 levels):\n' + tree(units[i], 4, '  '));
+    }
+  } else {
+    log('dump', 'no auto feed container found');
+  }
+  var labels = SPONSORED.length ? list(labels_raw.sponsored) : [];
+  labels = labels.concat(list(labels_raw.sections), list(labels_raw.feedOnly), list(CFG.dumpLabels));
+  labels.forEach(function (l) {
+    findLabel(l).forEach(function (el, n) {
+      log('dump', 'label "' + l + '" #' + n + ':\n' + ancestry(el, 30));
+    });
+  });
+  var fixed = [];
+  var all = document.body.getElementsByTagName('*');
+  for (var j = 0; j < all.length && fixed.length < 15; j++) {
+    var p = getComputedStyle(all[j]).position;
+    if (p === 'fixed' || p === 'sticky') fixed.push('  ' + describe(all[j]));
+  }
+  log('dump', 'fixed/sticky elements:\n' + (fixed.join('\n') || '  (none)'));
+  log('dump', '==== end of dump');
+}
+
+// ---------------------------------------------------------------------------------------
 // Main pass, observer, polling
 // ---------------------------------------------------------------------------------------
 
@@ -523,7 +725,10 @@ var pass = safe(function () {
   ensureStyle();
   forceLight();
   ensureHeader();
+  updatePageFonts();
+  ensureViewport();
   if (!document.body) return;
+  autoMarkUnits();
   hideBySelector();
   hideSponsored();
   hideSections(onFeed());
@@ -553,6 +758,9 @@ observe();
 var lastDebug = debugCache;
 setInterval(safe(function () {
   onUrlMaybeChanged('spa:poll');
+  var cmd = '';
+  try { cmd = NATIVE.takeCommand ? NATIVE.takeCommand() : ''; } catch (e) {}
+  if (cmd === 'dump') dumpPage();
   var d = isDebug();
   if (d !== lastDebug) {
     lastDebug = d;

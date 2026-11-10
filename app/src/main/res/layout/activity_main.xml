@@ -25,7 +25,7 @@
         <LinearLayout
             android:id="@+id/debugPanel"
             android:layout_width="match_parent"
-            android:layout_height="260dp"
+            android:layout_height="300dp"
             android:background="@color/debug_bg"
             android:orientation="vertical"
             android:visibility="gone">
@@ -70,6 +70,29 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/debug_off"
+                    android:textColor="@color/debug_text" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingStart="4dp">
+
+                <Button
+                    android:id="@+id/dumpPage"
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/dump_page"
+                    android:textColor="@color/debug_text" />
+
+                <Button
+                    android:id="@+id/siteToggle"
+                    style="?android:attr/buttonBarButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/desktop_site"
                     android:textColor="@color/debug_text" />
             </LinearLayout>
 

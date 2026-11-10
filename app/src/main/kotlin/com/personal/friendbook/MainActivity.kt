@@ -59,6 +59,12 @@ class MainActivity : ComponentActivity() {
     /** Reported by inject.js: whether the page's scroller is at the top (for pull-to-refresh). */
     @Volatile private var pageAtTop = true
 
+    /** Desktop site for this session (starts from rules.desktopMode; not persisted). */
+    @Volatile private var desktop = false
+
+    /** One-shot command for inject.js, picked up by its 500 ms poll ("dump"). */
+    @Volatile private var pendingCommand = ""
+
     /**
      * Addresses the current friends-feed document has rewritten itself to via replaceState
      * (e.g. "/"). Valid until the next full page load.
@@ -147,18 +153,8 @@ class MainActivity : ComponentActivity() {
         s.setSupportMultipleWindows(false)
         s.javaScriptCanOpenWindowsAutomatically = false
         s.allowFileAccess = false
-        if (rules.desktopMode && rules.desktopUserAgent.isNotEmpty()) {
-            s.userAgentString = rules.desktopUserAgent
-            s.useWideViewPort = true
-            s.loadWithOverviewMode = true
-            s.setSupportZoom(true)
-            s.builtInZoomControls = true
-            s.displayZoomControls = false
-        } else {
-            s.userAgentString = rules.uaRemoveTokens.fold(WebSettings.getDefaultUserAgent(this)) { ua, t ->
-                ua.replace(t, "")
-            }
-        }
+        desktop = rules.desktopMode && rules.desktopUserAgent.isNotEmpty()
+        applyUserAgent()
         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
             WebSettingsCompat.setAlgorithmicDarkeningAllowed(s, false)
         }
@@ -179,6 +175,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    private fun applyUserAgent() {
+        val s = webView.settings
+        if (desktop) {
+            s.userAgentString = rules.desktopUserAgent
+            s.useWideViewPort = true
+            s.loadWithOverviewMode = true
+            s.setSupportZoom(true)
+            s.builtInZoomControls = true
+            s.displayZoomControls = false
+        } else {
+            s.userAgentString = rules.uaRemoveTokens.fold(WebSettings.getDefaultUserAgent(this)) { ua, t ->
+                ua.replace(t, "")
+            }
+            s.useWideViewPort = false
+            s.loadWithOverviewMode = false
+            s.setSupportZoom(false)
+            s.builtInZoomControls = false
+        }
+        findViewById<Button>(R.id.siteToggle)?.setText(
+            if (desktop) R.string.mobile_site else R.string.desktop_site
+        )
+    }
+
     private fun setupRefresh() {
         swipe.setOnRefreshListener { loadFeed() }
         swipe.setOnChildScrollUpCallback { _, _ -> webView.scrollY > 0 || !pageAtTop }
@@ -197,6 +216,17 @@ class MainActivity : ComponentActivity() {
             logText.text = ""
         }
         findViewById<Button>(R.id.debugOff).setOnClickListener { setDebug(false) }
+        findViewById<Button>(R.id.dumpPage).setOnClickListener {
+            pendingCommand = "dump"
+            Toast.makeText(this, R.string.dumping, Toast.LENGTH_SHORT).show()
+        }
+        findViewById<Button>(R.id.siteToggle).setOnClickListener {
+            desktop = !desktop
+            DebugLog.add("debug", if (desktop) "switched to DESKTOP site" else "switched to MOBILE site")
+            applyUserAgent()
+            redirectGuard.reset()
+            loadFeed()
+        }
     }
 
     private fun copyLog() {
@@ -241,11 +271,14 @@ class MainActivity : ComponentActivity() {
     private fun filtering(): Boolean = !debug && isLoggedIn()
 
     /** Friends feed when logged in, the login page otherwise. Safe to call from any thread. */
-    private fun startUrl(): String = if (isLoggedIn()) rules.friendsFeedUrl else rules.loginUrl
+    private fun startUrl(): String {
+        val url = if (isLoggedIn()) rules.friendsFeedUrl else rules.loginUrl
+        return if (desktop) rules.withHost(url, rules.desktopHost) else url
+    }
 
     private fun loadFeed() {
         val url = startUrl()
-        if (debug) DebugLog.add("nav", "load ${if (url == rules.friendsFeedUrl) "feed" else "login (no session cookie)"} $url")
+        DebugLog.add("nav", "load ${if (rules.isFriendsFeed(url)) "feed" else "login (no session cookie)"}${if (desktop) " [desktop]" else ""} $url")
         webView.loadUrl(url)
     }
 
@@ -488,6 +521,16 @@ class MainActivity : ComponentActivity() {
         fun shouldRun(url: String): Boolean {
             val u = ParsedUrl.parse(url) ?: return false
             return u.scheme == "https" && rules.isInternalHost(u.host)
+        }
+
+        @JavascriptInterface
+        fun isDesktop(): Boolean = desktop
+
+        @JavascriptInterface
+        fun takeCommand(): String {
+            val c = pendingCommand
+            pendingCommand = ""
+            return c
         }
 
         /** Where inject.js sends a blocked SPA navigation. */

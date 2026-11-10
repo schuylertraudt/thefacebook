@@ -82,10 +82,12 @@
 
 /* ---- 2. Typography -------------------------------------------------------------- */
 
+/* --fbk-page-fonts (set by inject.js) = Facebook's own web fonts, as per-glyph fallbacks so
+   its icon-font characters still render. */
 html,
 body,
 body *:not(svg):not(path):not(i) {
-  font-family: "lucida grande", tahoma, verdana, arial, sans-serif !important;
+  font-family: "lucida grande", tahoma, verdana, arial, var(--fbk-page-fonts, sans-serif), sans-serif !important;
 }
 
 html,
@@ -197,7 +199,7 @@ html[data-friendbook] body {
   margin: 0 !important;
   background: #3b5998 !important;
   border-bottom: 1px solid #29447e !important;
-  font-family: "lucida grande", tahoma, verdana, arial, sans-serif !important;
+  font-family: "lucida grande", tahoma, verdana, arial, var(--fbk-page-fonts, sans-serif), sans-serif !important;
   -webkit-user-select: none !important;
   user-select: none !important;
 }

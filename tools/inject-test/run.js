@@ -49,6 +49,8 @@ function check(name, ok, detail) {
       },
       log: (t, m) => window.__nlog(t, m),
       setAtTop: () => {},
+      isDesktop: () => false,
+      takeCommand: () => { const c = window.__cmd || ''; window.__cmd = ''; return c; },
     };
   });
   await page.addInitScript({ content: wrapped });
@@ -66,6 +68,9 @@ function check(name, ok, detail) {
       ad1: h('ad1'), ad2: h('ad2'), ad3: h('ad3'), page: h('page'), pymk: h('pymk'),
       nameColor: getComputedStyle(document.querySelector('#friend h3 a')).color,
       timeTagged: document.querySelector('#friend a[href*=story] span').hasAttribute('data-fbk-time'),
+      m1: h('m1'), m2: h('m2'), m3: h('m3'), m1unit: document.getElementById('m1').hasAttribute('data-fbk-unit'),
+      fontsVar: getComputedStyle(document.documentElement).getPropertyValue('--fbk-page-fonts'),
+      iconFont: getComputedStyle(document.getElementById('icon')).fontFamily,
     };
   });
   check('header injected', st.header, st);
@@ -83,6 +88,11 @@ function check(name, ok, detail) {
   check('People you may know hidden', st.pymk === 'section:peopleyoumayknow', st.pymk);
   check('author name styled', st.nameColor === 'rgb(59, 89, 152)', st.nameColor);
   check('timestamp tagged', st.timeTagged, st.timeTagged);
+  check('auto feed units detected without roles', st.m1unit, st);
+  check('auto unit: Sponsored hidden', st.m2 === 'sponsored', st.m2);
+  check('auto unit: friend posts kept', st.m1 === null && st.m3 === null, [st.m1, st.m3]);
+  check('page web fonts exposed as fallback', /FBIcons/.test(st.fontsVar), st.fontsVar);
+  check('icon element keeps icon font as fallback', /FBIcons/.test(st.iconFont), st.iconFont);
 
   // Device log: the feed document rewrites its own URL to "/" right after loading.
   await page.evaluate(() => history.replaceState({}, '', '/'));
@@ -105,6 +115,9 @@ function check(name, ok, detail) {
   await page.waitForTimeout(1800);
   check('debug logs hidden count', logs.some(l => l.startsWith('[hidden]')), logs);
   check('debug logs css vars', logs.some(l => l.startsWith('[css-vars]')), logs);
+  await page.evaluate(() => { window.__cmd = 'dump'; });
+  await page.waitForTimeout(1200);
+  check('dump page logs structure', logs.some(l => l.startsWith('[dump] auto feed container')) && logs.some(l => l.includes('label "Sponsored"')), logs.filter(l => l.startsWith('[dump]')).slice(0, 3));
   await page.evaluate(() => history.pushState({}, '', '/reel/1'));
   await page.waitForTimeout(800);
   check('debug mode does not filter', page.url().endsWith('/reel/1'), page.url());

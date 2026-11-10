@@ -46,7 +46,8 @@ function classify(u) {
       isDebug: () => true, toggleDebug: () => {}, shouldRun: () => true,
       isFriendsFeed: () => false, log: (t, m) => { window.__fb_log(t, m); },
       checkUrl: (u, s) => { window.__fb_check(u, s); return 'allow'; }, // native side enforces below
-      redirectTarget: () => location.href, setAtTop: () => {},
+      redirectTarget: () => location.href, setAtTop: () => {}, isDesktop: () => false,
+      takeCommand: () => { const c = window.__cmd || ''; window.__cmd = ''; return c; },
     };
   });
   await page.addInitScript({ content: wrapped });
@@ -65,6 +66,7 @@ function classify(u) {
   console.log('start:', first);
   await page.goto(first, { waitUntil: 'load' }).catch(e => console.log('goto error', e.message));
   await page.waitForTimeout(7000);
+  if (process.env.DUMP) { await page.evaluate(() => { window.__cmd = 'dump'; }); await page.waitForTimeout(1500); }
   const st = await page.evaluate(() => ({
     url: location.href,
     header: !!document.getElementById('friendbook-header'),

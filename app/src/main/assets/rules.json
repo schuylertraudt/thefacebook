@@ -6,8 +6,10 @@
   "_friendsFeedCanonical": "Path+query patterns the friends-feed document may rewrite its own address to via history.replaceState (Facebook rewrites the feed URL to '/' after loading). Only tolerated inside a document that was loaded as friendsFeedUrl.",
   "friendsFeedCanonical": ["^/(\\?.*)?$"],
 
-  "_desktopMode": "true = load the desktop site with desktopUserAgent (set friendsFeedUrl/loginUrl/sessionCookie.url to www.facebook.com). Use if the mobile site has no friends-only feed.",
-  "desktopMode": false,
+  "_desktopMode": "true = start in desktop mode: desktopUserAgent, feed/login URLs moved to desktopHost, page laid out desktopViewportWidth CSS px wide and scaled to the screen. Can also be switched per session from the debug panel. The mobile site ignores filter=friends (serves Home); the desktop site honours it.",
+  "desktopMode": true,
+  "desktopHost": "www.facebook.com",
+  "desktopViewportWidth": 600,
   "desktopUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
 
   "_login": "While the session cookie is missing the app starts at loginUrl and allow/block rules are NOT enforced (Facebook moves the login form between /, /login/ and /unified/login_via/). Rules apply as soon as the cookie exists.",
@@ -106,11 +108,18 @@
       "Reels and short videos",
       "Stories",
       "Create story",
-      "Get Facebook for Android and browse faster."
+      "Get Facebook for Android and browse faster.",
+      "Open app"
     ],
     "_feedOnly": "Like sections, but only applied on the friends feed (these words appear legitimately on profiles).",
     "feedOnly": ["Follow", "Join", "Join group"]
   },
+
+  "_autoFeedUnits": "Detect feed units automatically (element with the most text+media children = feed list). Marked data-fbk-unit and treated like feedUnitSelectors.",
+  "autoFeedUnits": true,
+
+  "_dumpLabels": "Extra labels whose surroundings the debug panel's 'Dump page' logs (for writing selectors).",
+  "dumpLabels": ["What's on your mind?", "Feeds", "Friends", "Most recent", "Home", "Menu", "Notifications"],
 
   "sponsoredFuzzyRatio": 2.0,
   "sectionClimbMaxText": 2500,

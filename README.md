@@ -69,11 +69,19 @@ you out.
   bar to `/` with `history.replaceState`. Inside a document that was loaded as the friends
   feed, rewrites to a `friendsFeedCanonical` pattern are kept (JS check, native history
   check, popstate/back). `/` stays blocked as a navigation of its own (Home tab, links).
-- **Desktop mode** (`desktopMode: true`): loads the desktop site with `desktopUserAgent`
-  (wide viewport, pinch zoom). Use it if the mobile site serves the mixed Home feed for
-  `friendsFeedUrl`. Also set `friendsFeedUrl`, `loginUrl` and `sessionCookie.url` to
-  `https://www.facebook.com/…`; the desktop friends feed is
-  `https://www.facebook.com/?filter=friends&sk=h_chr`.
+- **Desktop mode** (`desktopMode`, default **true**): the mobile site ignores
+  `filter=friends` and serves the Home feed (confirmed on device), the desktop site honours
+  it. Desktop mode uses `desktopUserAgent`, moves `friendsFeedUrl`/`loginUrl` to
+  `desktopHost` (`www.facebook.com`) and lays pages out `desktopViewportWidth` (600) CSS px
+  wide, scaled to the screen, pinch-zoomable. The debug panel's **Desktop site / Mobile
+  site** button switches for the current session. The session cookie is shared by `m.` and
+  `www.`, so switching keeps you logged in.
+- **Fonts**: theme.css replaces Facebook's font everywhere, then lists the page's own web
+  fonts (`--fbk-page-fonts`, read from `document.fonts`) as per-glyph fallbacks, so
+  Facebook's icon-font characters still render instead of boxes.
+- **Automatic feed units** (`autoFeedUnits`): the element with the most text+media children
+  is taken as the feed list and its children are marked `data-fbk-unit`, so Sponsored /
+  section hiding works without knowing Facebook's markup.
 - **Logged out** (no `sessionCookie` cookie): allow/block rules are not enforced. Facebook
   serves the login form at `/`, `/login/` and `/unified/login_via/app/…` interchangeably, and
   logged-out sessions can only reach login pages. Once the cookie exists, rules apply, so
@@ -155,6 +163,11 @@ While it is on:
 - `[net:blocked-host]` shows each third-party host whose requests were refused.
 - Hidden elements stay visible but faded, with a dashed red outline and a
   `hidden: <reason>` tag, so you can check for false positives.
+- **Dump page** logs the page structure (`[dump]` lines): body tree, the auto-detected feed
+  container and its first units, the surroundings of every hide label and `dumpLabels`,
+  and fixed/sticky elements. Send this when hiding misses something; selectors for
+  `rules.json` come from it.
+- **Desktop site / Mobile site** switches the site for this session.
 - **Copy log** copies the whole log to the clipboard. Paste it into a note or message to
   yourself.
 
