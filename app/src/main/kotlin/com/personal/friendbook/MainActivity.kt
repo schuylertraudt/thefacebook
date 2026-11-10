@@ -1,0 +1,14 @@
+package com.personal.friendbook
+
+import android.os.Bundle
+import android.webkit.WebView
+import androidx.activity.ComponentActivity
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        val wv = WebView(this)
+        setContentView(wv)
+        wv.loadUrl("about:blank")
+    }
+}

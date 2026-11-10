@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="launcher_bg">#4A5A7A</color>
+    <color name="debug_bg">#E6111111</color>
+    <color name="debug_text">#FFE0E0E0</color>
+</resources>

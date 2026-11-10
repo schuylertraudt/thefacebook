@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Friendbook</string>
+    <string name="error_title">Couldn\'t load the feed</string>
+    <string name="retry">Retry</string>
+    <string name="copy_log">Copy log</string>
+    <string name="clear_log">Clear</string>
+    <string name="debug_off">Debug off</string>
+    <string name="debug_title">DEBUG · filtering OFF</string>
+    <string name="log_copied">Log copied</string>
+    <string name="no_browser">No app can open this link</string>
+</resources>
