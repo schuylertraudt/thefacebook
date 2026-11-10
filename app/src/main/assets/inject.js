@@ -410,17 +410,34 @@ function unitIsSponsored(unit) {
 // ancestor at that level) is hidden, so the feed gets the full width.
 // ---------------------------------------------------------------------------------------
 
+/** Parent of the configured feed-unit selectors' units if any are visible, else the auto container. */
 function feedAnchor() {
+  var sels = list(CFG.feedUnitSelectors);
+  for (var i = 0; i < sels.length; i++) {
+    var found;
+    try { found = document.querySelectorAll(sels[i]); } catch (e) { continue; }
+    for (var j = 0; j < found.length; j++) {
+      var u = unitOf(found[j]) || found[j];
+      var r = u.getBoundingClientRect();
+      if (r.width > 50 && r.height > 50 && u.parentElement) return u.parentElement;
+    }
+  }
   if (autoContainer && autoContainer.isConnected) return autoContainer;
-  var u = UNIT_SEL ? document.querySelector(UNIT_SEL) : null;
-  return u ? u.parentElement : null;
+  return null;
 }
+
+var lastAnchor = null;
 
 function hideSideColumns() {
   if (!CFG.hideSideColumns) return;
   var anchor = feedAnchor();
   if (!anchor) return;
   // Let the feed and every wrapper above it take the full width (see theme.css).
+  if (anchor !== lastAnchor) {
+    var stale = document.querySelectorAll('[data-fbk-feedpath]');
+    for (var x = 0; x < stale.length; x++) stale[x].removeAttribute('data-fbk-feedpath');
+    lastAnchor = anchor;
+  }
   for (var w = anchor; w && w !== document.body; w = w.parentElement) {
     if (!w.hasAttribute('data-fbk-feedpath')) w.setAttribute('data-fbk-feedpath', '');
   }
@@ -450,6 +467,8 @@ var autoCheckedAt = 0;
 
 function postLike(child) {
   if (child.id === HEADER_ID) return false;
+  var r = child.getBoundingClientRect();
+  if (r.width < 100 || r.height < 20) return false; // invisible lists (e.g. hidden chat list)
   var t = child.textContent;
   if (!t || t.length < 60) return false;
   return !!child.querySelector('img,video,svg image,[style*="background-image"]');
@@ -461,6 +480,7 @@ function findFeedContainer() {
   for (var i = 0; i < cands.length; i++) {
     var c = cands[i];
     if (c.childElementCount < 4) continue;
+    if (c.closest('[role="grid"],[role="navigation"],[role="complementary"],[role="dialog"]')) continue;
     var score = 0;
     for (var k = c.firstElementChild; k; k = k.nextElementSibling) if (postLike(k)) score++;
     // ">=": on ties prefer the later (deeper) element, i.e. the actual list, not a wrapper.
@@ -785,29 +805,66 @@ function dumpPage() {
   });
   out.push('outer units: ' + units.length);
   units.slice(0, 4).forEach(function (u, i) {
-    out.push('-- unit ' + i + ': ' + describe(u));
+    out.push('-- unit ' + i + ': ' + describe(u).slice(0, 200));
     var top = u.getBoundingClientRect().top;
-    var els = u.querySelectorAll('a,span,[aria-label],[aria-labelledby],use,svg,b,strong,h2,h3,h4');
-    var shown = 0;
-    for (var k = 0; k < els.length && shown < 22; k++) {
-      var el = els[k];
-      var r = el.getBoundingClientRect();
-      if (r.top - top > 170 || (!r.width && !r.height)) continue;
-      var t = (el.textContent || '').trim();
-      var interesting = el.hasAttribute('aria-label') || el.hasAttribute('aria-labelledby') ||
-        el.tagName === 'use' || (t && t.length <= 30);
-      if (!interesting) continue;
-      var line = '   ' + describe(el).slice(0, 170);
-      if (t && t.length <= 30) line += ' vis=' + JSON.stringify(visibleText(el));
-      var lb = el.getAttribute('aria-labelledby');
-      if (lb) line += ' labelledby->' + lb.split(/\s+/).map(function (id) {
-        var e = document.getElementById(id); return e ? JSON.stringify((e.textContent || '').slice(0, 30)) : '?';
-      }).join(',');
-      if (el.tagName === 'use') line += ' href=' + (el.getAttribute('href') || el.getAttribute('xlink:href'));
-      out.push(line);
-      shown++;
+    // Visible text pieces in the header strip, in reading order, with their element.
+    var pieces = [];
+    var seen = {};
+    var walker = document.createTreeWalker(u, NodeFilter.SHOW_TEXT, null);
+    for (var n = walker.nextNode(); n && pieces.length < 30; n = walker.nextNode()) {
+      var t = n.nodeValue.trim();
+      if (!t) continue;
+      var range = document.createRange();
+      range.selectNodeContents(n);
+      var r = range.getBoundingClientRect();
+      if (!r.width || !r.height || r.top - top > 170) continue;
+      var pe = n.parentElement;
+      var cs = getComputedStyle(pe);
+      var flags = (cs.display === 'none' ? ' display:none' : '') + (parseFloat(cs.opacity) === 0 ? ' opacity:0' : '') +
+        (cs.position === 'absolute' ? ' abs' : '') + (cs.overflow !== 'visible' ? ' ovf:' + cs.overflow : '') +
+        (cs.clipPath && cs.clipPath !== 'none' ? ' clip' : '');
+      var key = t + '|' + Math.round(r.top - top);
+      if (seen[key] || t === 'Facebook') { seen[key] = (seen[key] || 0) + 1; continue; }
+      seen[key] = 1;
+      pieces.push('   ' + JSON.stringify(t.slice(0, 40)) + ' @' + Math.round(r.left) + ',' + Math.round(r.top - top) +
+        ' ' + Math.round(r.width) + 'x' + Math.round(r.height) + flags + ' in ' + describe(pe).slice(0, 120));
     }
+    var fb = 0;
+    Object.keys(seen).forEach(function (k) { if (k.indexOf('Facebook|') === 0) fb += seen[k]; });
+    out.push('  header text pieces (' + fb + ' "Facebook" decoys skipped):\n' + pieces.join('\n'));
+    // Non-text labels: aria-label(ledby), svg text/use, ::before/::after content.
+    var extra = [];
+    var els = u.querySelectorAll('[aria-label],[aria-labelledby],svg text,use,a,span');
+    for (var k = 0; k < els.length && extra.length < 12; k++) {
+      var el = els[k];
+      var er = el.getBoundingClientRect();
+      if (er.top - top > 170 || (!er.width && !er.height)) continue;
+      var bits = [];
+      var al = el.getAttribute('aria-label');
+      if (al) bits.push('aria-label=' + JSON.stringify(al.slice(0, 40)));
+      var lb = el.getAttribute('aria-labelledby');
+      if (lb) bits.push('labelledby=' + lb.split(/\s+/).map(function (id) {
+        var e = document.getElementById(id); return e ? JSON.stringify((e.textContent || '').slice(0, 30)) : '?';
+      }).join(','));
+      if (el.tagName === 'text') bits.push('svg-text=' + JSON.stringify(el.textContent.slice(0, 30)));
+      if (el.tagName === 'use') bits.push('use=' + (el.getAttribute('href') || el.getAttribute('xlink:href')));
+      ['::before', '::after'].forEach(function (pse) {
+        var c = getComputedStyle(el, pse).content;
+        if (c && c !== 'none' && c !== 'normal' && c !== '""') bits.push(pse + '=' + c.slice(0, 30));
+      });
+      if (bits.length) extra.push('   ' + bits.join(' ') + ' on ' + describe(el).slice(0, 100));
+    }
+    if (extra.length) out.push('  non-text labels:\n' + extra.join('\n'));
   });
+  // What forces the page wide?
+  var wide = [];
+  var everything = document.body.getElementsByTagName('*');
+  for (var w = 0; w < everything.length && wide.length < 6; w++) {
+    var mw = parseFloat(getComputedStyle(everything[w]).minWidth);
+    if (mw >= 500) wide.push('  min-width ' + mw + 'px on ' + describe(everything[w]).slice(0, 120));
+  }
+  out.push('layout: innerWidth=' + innerWidth + ' scrollWidth=' + document.documentElement.scrollWidth +
+    '\n' + (wide.join('\n') || '  no min-width >= 500px'));
   var fixed = [];
   var all = document.body.getElementsByTagName('*');
   for (var j = 0; j < all.length && fixed.length < 8; j++) {

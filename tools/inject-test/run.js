@@ -117,7 +117,7 @@ function check(name, ok, detail) {
   check('debug logs css vars', logs.some(l => l.startsWith('[css-vars]')), logs);
   await page.evaluate(() => { window.__cmd = 'dump'; });
   await page.waitForTimeout(1200);
-  check('dump page logs structure', logs.some(l => l.startsWith('[dump] ==== page dump') && l.includes('outer units') && l.includes('vis=')), logs.filter(l => l.startsWith('[dump]')).map(l => l.slice(0, 300)));
+  check('dump page logs structure', logs.some(l => l.startsWith('[dump] ==== page dump') && l.includes('outer units') && l.includes('header text pieces')), logs.filter(l => l.startsWith('[dump]')).map(l => l.slice(0, 300)));
   await page.evaluate(() => history.pushState({}, '', '/reel/1'));
   await page.waitForTimeout(800);
   check('debug mode does not filter', page.url().endsWith('/reel/1'), page.url());
@@ -131,7 +131,9 @@ function check(name, ok, detail) {
   const d = await page.evaluate(() => {
     const h = id => document.getElementById(id).getAttribute('data-fbk-hidden');
     return { p1: h('p1'), p2: h('p2'), p3: h('p3'), p4: h('p4'), p5: h('p5'), p6: h('p6'), left: h('leftnav'), right: h('rightrail'),
-      feedWidth: Math.round(document.getElementById('feed').getBoundingClientRect().width) };
+      feedWidth: Math.round(document.getElementById('feed').getBoundingClientRect().width),
+      feedPathOnFeed: document.getElementById('feed').hasAttribute('data-fbk-feedpath'),
+      chatsMarked: !!document.querySelector('#chats [data-fbk-unit], #chats[data-fbk-feedpath]') };
   });
   check('desktop: "Ad" in post header hidden', d.p2 === 'sponsored', d);
   check('desktop: aria-labelledby Sponsored hidden', d.p4 === 'sponsored', d);
@@ -142,6 +144,13 @@ function check(name, ok, detail) {
   check('desktop: left column hidden', d.left === 'layout:side-column', d);
   check('desktop: right rail hidden', d.right === 'layout:side-column', d);
   check('desktop: feed takes the width', d.feedWidth > 1000, d.feedWidth);
+  check('desktop: feed (not hidden chat list) is the anchor', d.feedPathOnFeed && !d.chatsMarked, d);
+  logs.length = 0;
+  await page.evaluate(() => { window.FriendbookNative.toggleDebug(); window.__cmd = 'dump'; });
+  await page.waitForTimeout(1200);
+  const dump = logs.find(l => l.startsWith('[dump] ==== page dump https://www')) || '';
+  check('desktop dump lists header text pieces', /"Friend One" @/.test(dump) && dump.includes('layout: innerWidth'), dump.slice(0, 600));
+  if (process.env.SHOW_DUMP) console.log(dump);
 
   if (process.env.SHOW_LOG) console.log(logs.join('\n'));
   await browser.close();

@@ -132,7 +132,12 @@ time {
 }
 
 /* Feed and its wrappers (tagged by inject.js) take the full width. */
+html,
+body {
+  min-width: 0 !important;
+}
 [data-fbk-feedpath] {
+  min-width: 0 !important;
   max-width: none !important;
   width: auto !important;
   margin-left: 0 !important;
