@@ -1,0 +1,154 @@
+{
+  "_comment": "Friendbook rules. Every Facebook-specific value lives here or in theme.css / inject.js. Patterns are Java regexes matched (find, not full match) against PATH+QUERY, e.g. '/story.php?story_fbid=1&id=2'. Order of evaluation: friendsFeedUrl -> block -> allow -> default BLOCK. Escape backslashes twice in JSON.",
+
+  "friendsFeedUrl": "https://m.facebook.com/?filter=friends&sk=h_chr",
+
+  "internalHosts": [
+    "^([a-z0-9-]+\\.)*facebook\\.com$"
+  ],
+
+  "_openHosts": "Internal hosts where every path is allowed (no path filtering).",
+  "openHosts": [],
+
+  "_linkShim": "Facebook's outbound-link redirector. The target in 'param' is opened in the system browser.",
+  "linkShim": {
+    "hosts": ["^(l|lm)\\.facebook\\.com$"],
+    "param": "u"
+  },
+
+  "_resourceHosts": "Sub-resource requests (images, scripts, XHR) to any other host are refused. Blocked hosts are logged in debug mode.",
+  "resourceHosts": [
+    "^([a-z0-9-]+\\.)*facebook\\.com$",
+    "^([a-z0-9-]+\\.)*facebook\\.net$",
+    "^([a-z0-9-]+\\.)*fbcdn\\.net$",
+    "^([a-z0-9-]+\\.)*fbsbx\\.com$",
+    "^([a-z0-9-]+\\.)*fb\\.com$"
+  ],
+
+  "_injectOrigins": "Origins where inject.js + theme.css are injected at document start.",
+  "injectOrigins": [
+    "https://facebook.com",
+    "https://*.facebook.com"
+  ],
+
+  "internalSchemes": ["about", "data", "blob", "javascript"],
+  "externalSchemes": ["mailto", "tel", "sms", "geo"],
+
+  "uaRemoveTokens": ["; wv"],
+
+  "block": [
+    "^/(\\?.*)?$",
+    "^/home\\.php",
+    "^/watch(/|\\?|$)",
+    "^/reels?(/|\\?|$)",
+    "^/[^/?]+/reels?(/|\\?|$)",
+    "^/marketplace(/|\\?|$)",
+    "^/gaming(/|\\?|$)",
+    "^/groups/?(\\?.*)?$",
+    "^/groups/(feed|discover|joins)(/|\\?|$)",
+    "^/stories(/|\\?|$)",
+    "^/search(/|\\?|$)",
+    "^/(bookmarks|friends|saved|memories|events|pages|feeds|games|jobs|fundraisers|ads|business|shorts|video|live|news|weather)(/|\\?|$)"
+  ],
+
+  "allow": [
+    "^/(story|permalink)\\.php\\?",
+    "^/[^/?]+/posts/",
+    "^/[^/?]+/videos/[0-9]",
+    "^/photo(\\.php)?/?\\?",
+    "^/photos/",
+    "^/[^/?]+/photos/",
+    "^/media/set/",
+    "^/profile\\.php\\?",
+    "^/me/?(\\?.*)?$",
+    "^/notifications(\\.php)?/?(\\?.*)?$",
+    "^/messages(/|\\?|$)",
+    "^/comment/",
+    "^/ufi/",
+    "^/reactions/",
+    "^/browse/(likes|reactions)",
+    "^/a/",
+    "^/composer(/|\\?|$)",
+    "^/login(\\.php)?(/|\\?|$)",
+    "^/checkpoint(/|\\?|$)",
+    "^/two_step_verification(/|\\?|$)",
+    "^/two_factor(/|\\?|$)",
+    "^/recover(/|\\?|$)",
+    "^/auth_platform(/|\\?|$)",
+    "^/cookie/consent",
+    "^/privacy/consent",
+    "^/confirmemail\\.php",
+    "^/logout\\.php",
+    "^/[A-Za-z0-9.]{5,}/(about|photos|friends|posts)(/|\\?|$)",
+    "^/[A-Za-z0-9.]{5,}/?(\\?.*)?$"
+  ],
+
+  "hideLabels": {
+    "_sponsored": "Feed units containing one of these labels (exact or with decoy letters, see sponsoredFuzzyRatio) are hidden.",
+    "sponsored": ["Sponsored", "Paid partnership"],
+    "_sections": "Blocks headed by one of these labels are hidden on every page.",
+    "sections": [
+      "Suggested for you",
+      "People you may know",
+      "Reels",
+      "Reels and short videos",
+      "Stories",
+      "Create story"
+    ],
+    "_feedOnly": "Like sections, but only applied on the friends feed (these words appear legitimately on profiles).",
+    "feedOnly": ["Follow", "Join", "Join group"]
+  },
+
+  "sponsoredFuzzyRatio": 2.0,
+  "sectionClimbMaxText": 2500,
+
+  "_feedUnitSelectors": "What counts as one post / feed unit.",
+  "feedUnitSelectors": [
+    "[role=\"article\"]",
+    "[data-pagelet^=\"FeedUnit\"]",
+    "div[data-tracking-duration-id]"
+  ],
+
+  "_hideSelectors": "Elements always hidden, grouped by reason (the group name shows up in data-fbk-hidden).",
+  "hideSelectors": {
+    "stories": [
+      "[aria-label=\"Stories\"]",
+      "[aria-label=\"stories tray\" i]",
+      "[data-pagelet=\"Stories\"]",
+      "#MStoriesTray",
+      "[data-mcomponent=\"StoriesTray\"]"
+    ],
+    "fb-chrome": [
+      "[role=\"banner\"]",
+      "#header",
+      "#MTopBlueBarHeader",
+      "#mJewelNav",
+      "[role=\"tablist\"][aria-label=\"Facebook\"]",
+      "[data-pagelet=\"TopNav\"]",
+      "[aria-label=\"Facebook\"][role=\"navigation\"]"
+    ]
+  },
+
+  "_nameSelectors": "Inside a feed unit: elements styled as author names.",
+  "nameSelectors": [
+    "h2 a", "h3 a", "h4 a", "strong a", "a strong",
+    "a[href*=\"/profile.php\"] > span"
+  ],
+
+  "_timestampPattern": "Short text matching this (case-insensitive JS regex) inside a feed unit is styled as a timestamp.",
+  "timestampPattern": "^(just now|now|yesterday( at .*)?|\\d+\\s?(s|m|h|d|w|y|min|mins|hr|hrs|minutes?|hours?|days?|weeks?|years?)( ago)?|(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]* \\d{1,2}(, \\d{4})?( at .*)?)$",
+
+  "_forceLightMode": "Classes swapped on <html> to force Facebook's light palette.",
+  "forceLightMode": {
+    "removeClasses": ["__fb-dark-mode"],
+    "addClasses": ["__fb-light-mode"]
+  },
+
+  "_headerLinks": "url \"@friendsFeedUrl\" means the friendsFeedUrl value above.",
+  "headerTitle": "Friendbook",
+  "headerLinks": [
+    { "label": "Feed", "url": "@friendsFeedUrl" },
+    { "label": "Notifications", "url": "https://m.facebook.com/notifications" },
+    { "label": "Profile", "url": "https://m.facebook.com/me" }
+  ]
+}
