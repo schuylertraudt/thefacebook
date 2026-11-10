@@ -130,7 +130,7 @@ function check(name, ok, detail) {
   await page.waitForTimeout(900);
   const d = await page.evaluate(() => {
     const h = id => document.getElementById(id).getAttribute('data-fbk-hidden');
-    return { p1: h('p1'), p2: h('p2'), p3: h('p3'), p4: h('p4'), p5: h('p5'), p6: h('p6'), left: h('leftnav'), right: h('rightrail'),
+    return { p1: h('p1'), p2: h('p2'), p3: h('p3'), p4: h('p4'), p5: h('p5'), p6: h('p6'), p7: h('p7'), p8: h('p8'), p9: h('p9'), left: h('leftnav'), right: h('rightrail'),
       feedWidth: Math.round(document.getElementById('feed').getBoundingClientRect().width),
       feedPathOnFeed: document.getElementById('feed').hasAttribute('data-fbk-feedpath'),
       chatsMarked: !!document.querySelector('#chats [data-fbk-unit], #chats[data-fbk-feedpath]') };
@@ -141,12 +141,22 @@ function check(name, ok, detail) {
   check('desktop: "Ad" deep in post body (not header) kept', d.p3 === null, d);
   check('desktop: "Ad" with hidden/positioned/transparent/zero-size decoys hidden', d.p5 === 'sponsored', d);
   check('desktop: friend link reading "Dad" kept', d.p6 === null, d);
+  check('desktop: SVG <use> label "Ad" hidden', d.p7 === 'sponsored', d);
+  check('desktop: SVG <use> timestamp kept', d.p8 === null, d);
+  check('desktop: "Ad" letters with U+034F joiners and a positioned decoy hidden', d.p9 === 'sponsored', d);
   check('desktop: left column hidden', d.left === 'layout:side-column', d);
   check('desktop: right rail hidden', d.right === 'layout:side-column', d);
   check('desktop: feed takes the width', d.feedWidth > 1000, d.feedWidth);
   check('desktop: feed (not hidden chat list) is the anchor', d.feedPathOnFeed && !d.chatsMarked, d);
   logs.length = 0;
   await page.evaluate(() => { window.FriendbookNative.toggleDebug(); window.__cmd = 'dump'; });
+  await page.waitForTimeout(700);
+  const dbg = await page.evaluate(() => ({
+    left: getComputedStyle(document.getElementById('leftnav')).display,
+    ad: getComputedStyle(document.getElementById('p2')).display,
+    feedWidth: Math.round(document.getElementById('feed').getBoundingClientRect().width) }));
+  check('debug review: side column stays hidden, feed keeps width', dbg.left === 'none' && dbg.feedWidth > 1000, dbg);
+  check('debug review: hidden ad shown for review', dbg.ad !== 'none', dbg);
   await page.waitForTimeout(1200);
   const dump = logs.find(l => l.startsWith('[dump] ==== page dump https://www')) || '';
   check('desktop dump lists header text pieces', /"Friend One" @/.test(dump) && dump.includes('layout: innerWidth'), dump.slice(0, 600));

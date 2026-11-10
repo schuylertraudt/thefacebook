@@ -25,10 +25,13 @@ var HIDDEN_ATTR = 'data-fbk-hidden';
 // Functional CSS (not theming): how hidden elements behave, and their debug-mode review look.
 var CORE_CSS =
   '[' + HIDDEN_ATTR + ']{display:none!important}' +
-  'html[data-fbk-debug] [' + HIDDEN_ATTR + ']{display:block!important;opacity:.35!important;' +
-  'outline:2px dashed #c00!important;outline-offset:-2px;position:relative!important;max-height:160px!important;overflow:hidden!important}' +
-  'html[data-fbk-debug] [' + HIDDEN_ATTR + ']::before{content:"hidden: " attr(' + HIDDEN_ATTR + ');' +
-  'position:absolute;z-index:2;top:0;left:0;background:#c00;color:#fff;font:bold 10px monospace;padding:1px 4px}';
+  // Debug review: content hides (sponsored, sections) are shown faded and outlined.
+  // Structural hides (layout:, selector:) stay hidden: showing them reflows the page
+  // (a hidden side column would squeeze the feed again).
+  'html[data-fbk-debug] [' + HIDDEN_ATTR + ']:not([' + HIDDEN_ATTR + '^="layout:"]):not([' + HIDDEN_ATTR + '^="selector:"]){display:revert!important;opacity:.35!important;' +
+  'outline:2px dashed #c00!important;outline-offset:-2px}' +
+  'html[data-fbk-debug] [' + HIDDEN_ATTR + ']:not([' + HIDDEN_ATTR + '^="layout:"]):not([' + HIDDEN_ATTR + '^="selector:"])::before{content:"hidden: " attr(' + HIDDEN_ATTR + ');' +
+  'display:block;background:#c00;color:#fff;font:bold 10px monospace;padding:1px 4px}';
 
 // ---------------------------------------------------------------------------------------
 // Small helpers
@@ -56,7 +59,8 @@ function abs(url) {
 
 /** Lowercase, strip all whitespace and zero-width characters. */
 function norm(s) {
-  return (s || '').replace(/[\s\u00a0\u200b-\u200f\u2028\u2029\u2060\ufeff]+/g, '').toLowerCase();
+  // Also drops invisible joiners Facebook mixes into labels (U+034F after every letter).
+  return (s || '').replace(/[\s\u00a0\u00ad\u034f\u115f\u1160\u17b4\u17b5\u180e\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u206f\ufeff\ufe00-\ufe0f]+/g, '').toLowerCase();
 }
 
 /** True if every character of `needle` appears in order in `hay`. */
@@ -396,11 +400,40 @@ function unitIsSponsored(unit) {
       if (ref && SPONSORED.indexOf(norm(ref.textContent)) >= 0 && inHeader(byRef[r], unitTop)) return true;
     }
   }
+  // Labels drawn as SVG: <use href="#SvgX"> renders an element (usually <text>) stored
+  // elsewhere in the page; compare that element's text.
+  var uses = unit.querySelectorAll('use');
+  for (var u = 0; u < uses.length; u++) {
+    var refText = useText(uses[u]);
+    if (refText !== null && inHeader(uses[u], unitTop) && labelEquals(refText)) return true;
+  }
   var cands = unit.querySelectorAll('a,span,b,strong');
   for (var j = 0; j < cands.length; j++) {
     var t = cands[j].textContent;
     if (!t || t.length > SPONSORED_MAXLEN) continue;
     if (sponsoredMatch(cands[j], t) && inHeader(cands[j], unitTop)) return true;
+  }
+  return false;
+}
+
+/** Text of the element an SVG <use> points at, or null. */
+function useText(use) {
+  var href = use.getAttribute('href') || use.getAttribute('xlink:href') ||
+    use.getAttributeNS('http://www.w3.org/1999/xlink', 'href') || '';
+  if (href.charAt(0) !== '#') return null;
+  var ref = document.getElementById(href.slice(1));
+  return ref ? (ref.textContent || '') : null;
+}
+
+/** Exact label match; labels of sponsoredFuzzyMinLength+ letters may also match with decoys. */
+function labelEquals(text) {
+  var n = norm(text);
+  if (!n) return false;
+  for (var i = 0; i < SPONSORED.length; i++) {
+    var lab = SPONSORED[i];
+    if (n === lab) return true;
+    if (lab.length >= FUZZY_MIN_LEN && FUZZY_RATIO > 0 && n.length <= lab.length * FUZZY_RATIO &&
+        isSubsequence(lab, n)) return true;
   }
   return false;
 }
@@ -747,7 +780,7 @@ function describe(el) {
   var r = el.getBoundingClientRect();
   s += ' kids=' + el.childElementCount + ' ' + Math.round(r.width) + 'x' + Math.round(r.height);
   var t = (el.textContent || '').replace(/\s+/g, ' ').trim();
-  if (t) s += ' "' + t.slice(0, 50) + (t.length > 50 ? '…' : '') + '"(' + t.length + ')';
+  if (t) s += ' "' + t.slice(0, 50) + (t.length > 50 ? '\u2026' : '') + '"(' + t.length + ')';
   return s;
 }
 
@@ -766,7 +799,7 @@ function tree(el, depth, indent) {
   for (var k = el.firstElementChild; k && n < 12; k = k.nextElementSibling, n++) {
     out += '\n' + tree(k, depth - 1, indent + '  ');
   }
-  if (el.childElementCount > 12) out += '\n' + indent + '  … ' + (el.childElementCount - 12) + ' more';
+  if (el.childElementCount > 12) out += '\n' + indent + '  \u2026 ' + (el.childElementCount - 12) + ' more';
   return out;
 }
 
@@ -847,7 +880,11 @@ function dumpPage() {
         var e = document.getElementById(id); return e ? JSON.stringify((e.textContent || '').slice(0, 30)) : '?';
       }).join(','));
       if (el.tagName === 'text') bits.push('svg-text=' + JSON.stringify(el.textContent.slice(0, 30)));
-      if (el.tagName === 'use') bits.push('use=' + (el.getAttribute('href') || el.getAttribute('xlink:href')));
+      if (el.tagName === 'use') {
+        var ut = useText(el);
+        bits.push('use=' + (el.getAttribute('href') || el.getAttribute('xlink:href')) +
+          ' -> ' + (ut === null ? '(not found)' : JSON.stringify(ut.slice(0, 40))));
+      }
       ['::before', '::after'].forEach(function (pse) {
         var c = getComputedStyle(el, pse).content;
         if (c && c !== 'none' && c !== 'normal' && c !== '""') bits.push(pse + '=' + c.slice(0, 30));

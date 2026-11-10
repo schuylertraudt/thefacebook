@@ -88,6 +88,9 @@ you out.
   hides a friend's post. Labels attached via `aria-labelledby` are resolved. Labels are
   also compared on their *visible* text: characters that are hidden, transparent,
   zero-size or positioned off the label's line (Facebook's decoy letters) are dropped.
+  Invisible joiners (U+034F after every letter) are stripped. Labels drawn as SVG
+  (`<use href="#SvgX">` pointing at a `<text>` elsewhere in the page) are resolved and
+  compared too; this is how the desktop feed draws "Ad".
 - **Automatic feed units** (`autoFeedUnits`): the element with the most text+media children
   is taken as the feed list and its children are marked `data-fbk-unit`, so Sponsored /
   section hiding works without knowing Facebook's markup.
@@ -170,8 +173,9 @@ While it is on:
 - `[css-vars]` lists every CSS custom property the page defines, with Facebook's original
   values. `*` = already overridden by theme.css, `c` = looks like a color.
 - `[net:blocked-host]` shows each third-party host whose requests were refused.
-- Hidden elements stay visible but faded, with a dashed red outline and a
-  `hidden: <reason>` tag, so you can check for false positives.
+- Content hides (sponsored, sections) stay visible but faded, with a dashed red outline
+  and a `hidden: <reason>` tag, so you can check for false positives. Structural hides
+  (`layout:` side columns, `selector:` Facebook chrome) stay hidden so the layout is real.
 - **Dump page** logs the page structure (`[dump]` lines): body tree, the auto-detected feed
   container and its first units, the surroundings of every hide label and `dumpLabels`,
   and fixed/sticky elements. Send this when hiding misses something; selectors for
