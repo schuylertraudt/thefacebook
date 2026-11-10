@@ -91,8 +91,11 @@ you out.
   - injected JS: wrapped `history.pushState`/`replaceState`, `popstate`, `hashchange`,
     and a 500 ms `location.href` poll. Blocked → `location.replace(friendsFeedUrl)`.
   - Every blocked navigation is redirected (no de-duplication). If the start page keeps
-    bouncing to blocked URLs (more than 6 redirects in 10 s), or the page fails to load, a
-    native error screen with **Retry** is shown.
+    bouncing to blocked URLs (more than 5 bounces in 15 s; reports of one bounce from several
+    hooks within 400 ms count once), or the page fails to load, a native error screen is
+    shown. It lists the blocked URLs and the rule that blocked each, with **Retry**,
+    **Debug mode** (reload with filtering off) and **Copy log**. Navigation decisions are
+    always kept in the in-memory log, so the log is useful even if debug mode was off.
 - **Network**: sub-resource requests to hosts not in `resourceHosts` are answered locally
   with 403 (no analytics or third-party calls). No data is stored besides WebView cookies
   and cache; the debug log is memory-only.

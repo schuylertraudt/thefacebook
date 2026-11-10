@@ -173,16 +173,18 @@ class MainActivity : ComponentActivity() {
                 logScroll.post { logScroll.fullScroll(View.FOCUS_DOWN) }
             }
         }
-        findViewById<Button>(R.id.copyLog).setOnClickListener {
-            val cm = getSystemService(ClipboardManager::class.java)
-            cm.setPrimaryClip(ClipData.newPlainText("Friendbook log", DebugLog.text()))
-            Toast.makeText(this, R.string.log_copied, Toast.LENGTH_SHORT).show()
-        }
+        findViewById<Button>(R.id.copyLog).setOnClickListener { copyLog() }
         findViewById<Button>(R.id.clearLog).setOnClickListener {
             DebugLog.clear()
             logText.text = ""
         }
         findViewById<Button>(R.id.debugOff).setOnClickListener { setDebug(false) }
+    }
+
+    private fun copyLog() {
+        val cm = getSystemService(ClipboardManager::class.java)
+        cm.setPrimaryClip(ClipData.newPlainText("Friendbook log", DebugLog.text()))
+        Toast.makeText(this, R.string.log_copied, Toast.LENGTH_SHORT).show()
     }
 
     private fun setupErrorView() {
@@ -191,7 +193,13 @@ class MainActivity : ComponentActivity() {
             errorView.visibility = View.GONE
             loadFeed()
         }
-        // Debug mode is also reachable when the page never loads.
+        findViewById<Button>(R.id.errorDebug).setOnClickListener {
+            redirectGuard.reset()
+            errorView.visibility = View.GONE
+            setDebug(true)
+            loadFeed()
+        }
+        findViewById<Button>(R.id.errorCopy).setOnClickListener { copyLog() }
         findViewById<View>(R.id.errorTitle).setOnLongClickListener {
             setDebug(!debug)
             true
@@ -235,13 +243,14 @@ class MainActivity : ComponentActivity() {
         } else {
             // Re-apply filtering to wherever we are now.
             webView.url?.let { url ->
-                if (filtering() && rules.classify(url).decision == Decision.BLOCK) redirectToFeed()
+                val v = rules.classify(url)
+                if (filtering() && v.decision == Decision.BLOCK) redirectToFeed(v)
             }
         }
     }
 
+    /** Navigation decisions are always kept in the in-memory log so a failure can be copied. */
     private fun logNav(source: String, v: Verdict, url: String) {
-        if (!debug) return
         val extra = if (v.target != url) " -> ${v.target}" else ""
         val session = if (isLoggedIn()) "" else " (logged out: not enforced)"
         DebugLog.add(source, "${v.decision} [${v.reason}] $url$extra$session")
@@ -266,7 +275,7 @@ class MainActivity : ComponentActivity() {
                     !isWeb -> true // fb://, intent:// ... never load, never hand to the FB app.
                     !filtering() -> false
                     else -> {
-                        redirectToFeed()
+                        redirectToFeed(v)
                         true
                     }
                 }
@@ -275,16 +284,32 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Sends a blocked navigation to the start URL, unless the start URL itself keeps bouncing. */
-    private fun redirectToFeed() {
+    private fun redirectToFeed(blocked: Verdict) {
+        noteBlocked(blocked)
         if (redirectGuard.allow(SystemClock.elapsedRealtime())) loadFeed() else showLoopError()
+    }
+
+    /** Last few distinct blocked URLs, shown on the loop error screen. */
+    private val recentBlocked = ArrayDeque<String>()
+
+    private fun noteBlocked(v: Verdict) {
+        val line = "${v.target.take(160)}\n  rule: ${v.reason}"
+        synchronized(recentBlocked) {
+            recentBlocked.remove(line)
+            recentBlocked.addLast(line)
+            while (recentBlocked.size > 3) recentBlocked.removeFirst()
+        }
     }
 
     private fun showLoopError() {
         webView.stopLoading()
-        DebugLog.add("error", "redirect loop: ${startUrl()} keeps landing on blocked URLs")
+        val start = startUrl()
+        val blocked = synchronized(recentBlocked) { recentBlocked.joinToString("\n\n") }
+        DebugLog.add("error", "redirect loop: $start keeps landing on blocked URLs:\n$blocked")
         showError(
-            "The start page keeps redirecting to a blocked page.\n" +
-                "Long-press the title above to enable debug mode and check friendsFeedUrl."
+            "The start page keeps landing on blocked URLs.\n\n" +
+                "Start: $start\n\nBlocked:\n$blocked\n\n" +
+                "Tap Debug mode to load it with filtering off, or Copy log."
         )
     }
 
@@ -329,7 +354,7 @@ class MainActivity : ComponentActivity() {
                 }
                 v.decision == Decision.BLOCK && filtering() -> {
                     view.stopLoading()
-                    redirectToFeed()
+                    redirectToFeed(v)
                     return
                 }
             }
@@ -348,7 +373,7 @@ class MainActivity : ComponentActivity() {
             if (v.decision == Decision.BLOCK && filtering() &&
                 (url.startsWith("https://") || url.startsWith("http://"))
             ) {
-                redirectToFeed()
+                redirectToFeed(v)
             }
         }
 
@@ -459,6 +484,7 @@ class MainActivity : ComponentActivity() {
                 Decision.EXTERNAL -> "external"
                 Decision.BLOCK -> {
                     if (!filtering()) return "allow"
+                    noteBlocked(v)
                     if (redirectGuard.allow(SystemClock.elapsedRealtime())) {
                         "block"
                     } else {
