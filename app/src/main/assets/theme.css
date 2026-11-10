@@ -1,0 +1,229 @@
+/*
+ * Friendbook classic theme (2008–2011 look).
+ * Injected as a <style> tag at document start and re-applied after SPA navigations.
+ * Facebook-specific hooks used here:
+ *   - CSS custom properties on :root / .__fb-light-mode / .__fb-dark-mode
+ *   - [role="article"] etc. for posts
+ * data-fbk-* attributes are set by inject.js.
+ * Turn on debug mode to log every custom property defined on :root, then add any
+ * missing ones to the block below.
+ */
+
+/* ---- 1. Palette ------------------------------------------------------------------ */
+
+:root,
+:root.__fb-light-mode,
+:root.__fb-dark-mode,
+.__fb-light-mode,
+.__fb-dark-mode {
+  color-scheme: light !important;
+
+  /* Requested */
+  --web-wash: #edeff4 !important;
+  --surface-background: #fff !important;
+  --card-background: #fff !important;
+  --primary-text: #333 !important;
+  --secondary-text: #808080 !important;
+  --divider: #d8dfea !important;
+  --accent: #3b5998 !important;
+  --blue-link: #3b5998 !important;
+
+  /* Other color variables seen on Facebook web; harmless if unused. */
+  --wash: #edeff4 !important;
+  --card-background-flat: #fff !important;
+  --nav-bar-background: #fff !important;
+  --popover-background: #fff !important;
+  --comment-background: #f7f7f7 !important;
+  --input-background: #fff !important;
+  --input-border-color: #bdc7d8 !important;
+  --primary-icon: #333 !important;
+  --secondary-icon: #808080 !important;
+  --placeholder-icon: #bdc7d8 !important;
+  --placeholder-text: #808080 !important;
+  --disabled-text: #b0b0b0 !important;
+  --disabled-icon: #b0b0b0 !important;
+  --primary-button-background: #5b74a8 !important;
+  --primary-button-text: #fff !important;
+  --secondary-button-background: #f7f7f7 !important;
+  --secondary-button-background-floating: #f7f7f7 !important;
+  --secondary-button-text: #333 !important;
+  --primary-deemphasized-button-background: #edeff4 !important;
+  --primary-deemphasized-button-text: #3b5998 !important;
+  --highlight-bg: #fff9d7 !important;
+  --hover-overlay: rgba(59, 89, 152, 0.06) !important;
+  --press-overlay: rgba(59, 89, 152, 0.12) !important;
+  --media-inner-border: #d8dfea !important;
+  --divider-on-wash: #d8dfea !important;
+  --text-highlight: rgba(59, 89, 152, 0.2) !important;
+  --toggle-active-background: #3b5998 !important;
+  --toggle-active-icon: #fff !important;
+  --toggle-active-text: #3b5998 !important;
+  --primary-web-focus-indicator: #3b5998 !important;
+  --badge-background-color: #f03d25 !important;
+  --notification-badge: #f03d25 !important;
+  --accent-deemphasized: #edeff4 !important;
+  --link-color: #3b5998 !important;
+  --text-link: #3b5998 !important;
+
+  /* Shape */
+  --card-corner-radius: 0 !important;
+  --button-corner-radius: 0 !important;
+  --input-corner-radius: 0 !important;
+  --shadow-1: none !important;
+  --shadow-2: none !important;
+  --shadow-5: none !important;
+  --shadow-8: none !important;
+  --shadow-base: none !important;
+  --shadow-elevated: none !important;
+  --shadow-inset: none !important;
+  --shadow-emphasis: none !important;
+  --shadow-persistent: none !important;
+}
+
+/* ---- 2. Typography -------------------------------------------------------------- */
+
+html,
+body,
+body *:not(svg):not(path):not(i) {
+  font-family: "lucida grande", tahoma, verdana, arial, sans-serif !important;
+}
+
+html,
+body {
+  font-size: 13px !important;
+  color: #333 !important;
+  background: #edeff4 !important;
+}
+
+[role="article"] span,
+[role="article"] div,
+[role="article"] p {
+  font-size: 13px !important;
+  line-height: 1.38 !important;
+}
+
+a,
+a:visited {
+  color: #3b5998 !important;
+  text-decoration: none;
+}
+
+[data-fbk-name],
+[data-fbk-name] span,
+[role="article"] h2,
+[role="article"] h3,
+[role="article"] h4 {
+  color: #3b5998 !important;
+  font-weight: bold !important;
+}
+
+[data-fbk-time],
+[data-fbk-time] span,
+abbr,
+time {
+  color: #808080 !important;
+  font-size: 11px !important;
+  font-weight: normal !important;
+}
+
+/* ---- 3. Shape --------------------------------------------------------------------- */
+
+body *:not(#friendbook-header) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+[role="article"] {
+  background: #fff !important;
+  border: 1px solid #d8dfea !important;
+  margin: 0 0 8px 0 !important;
+  padding: 8px 10px !important;
+}
+
+/* Nested articles are comments on Facebook web; don't double-frame them. */
+[role="article"] [role="article"] {
+  border: 0 !important;
+  margin: 0 0 2px 0 !important;
+  padding: 5px 6px !important;
+  background: #f7f7f7 !important;
+}
+
+/* Comment areas */
+[aria-label^="Comment by"],
+[aria-label^="Reply by"],
+[data-sigil*="comment"],
+form[action*="comment"],
+[role="article"] ul,
+[role="article"] [contenteditable="true"] {
+  background: #f7f7f7 !important;
+}
+
+input,
+textarea,
+[contenteditable="true"] {
+  border: 1px solid #bdc7d8 !important;
+  background: #fff !important;
+}
+
+button,
+[role="button"] {
+  border-radius: 0 !important;
+}
+
+img {
+  border-radius: 0 !important;
+}
+
+/* ---- 4. Light mode is forced via color-scheme above + class swap in inject.js ---- */
+
+/* ---- 5. Friendbook header (our own markup, not Facebook's) -------------------- */
+
+html[data-friendbook] body {
+  padding-top: 42px !important;
+}
+
+#friendbook-header {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  height: 42px !important;
+  box-sizing: border-box !important;
+  z-index: 2147483647 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0 10px !important;
+  margin: 0 !important;
+  background: #3b5998 !important;
+  border-bottom: 1px solid #29447e !important;
+  font-family: "lucida grande", tahoma, verdana, arial, sans-serif !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+#friendbook-header .fbk-title {
+  color: #fff !important;
+  font-weight: bold !important;
+  font-size: 17px !important;
+  letter-spacing: -0.5px !important;
+  -webkit-touch-callout: none !important;
+  white-space: nowrap !important;
+}
+
+#friendbook-header .fbk-links {
+  display: flex !important;
+  gap: 12px !important;
+}
+
+#friendbook-header .fbk-links a,
+#friendbook-header .fbk-links a:visited {
+  color: #fff !important;
+  font-size: 12px !important;
+  font-weight: normal !important;
+  text-decoration: none !important;
+}
+
+#friendbook-header .fbk-links a:active {
+  text-decoration: underline !important;
+}
