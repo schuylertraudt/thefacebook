@@ -77,6 +77,7 @@ function list(v) { return Array.isArray(v) ? v : []; }
 var labels = CFG.hideLabels || {};
 var labels_raw = labels;
 var SPONSORED = list(labels.sponsored).map(norm).filter(Boolean);
+var AD_CTA = list(CFG.adCtaLabels).map(norm).filter(Boolean);
 var SECTIONS = list(labels.sections).map(norm).filter(Boolean);
 var FEED_ONLY = list(labels.feedOnly).map(norm).filter(Boolean);
 var AUTO_UNIT_ATTR = 'data-fbk-unit';
@@ -589,8 +590,27 @@ function ensureViewport() {
   if (ours.content !== want) ours.content = want;
 }
 
+/**
+ * Ad call-to-action buttons ("Learn more", "Shop now"...) anywhere in a unit. Facebook draws
+ * the "Ad" label itself as SVG shapes with no text, but these buttons are plain text and
+ * appear only on ads.
+ */
+function unitAdCta(unit) {
+  if (!AD_CTA.length) return null;
+  var els = unit.querySelectorAll('[role="button"],[role="link"],a,button');
+  for (var i = 0; i < els.length; i++) {
+    var t = els[i].textContent;
+    if (!t || t.length > 40) continue;
+    var n = norm(t);
+    if (AD_CTA.indexOf(n) >= 0) return n;
+    var al = els[i].getAttribute('aria-label');
+    if (al && al.length <= 40 && AD_CTA.indexOf(norm(al)) >= 0) return norm(al);
+  }
+  return null;
+}
+
 function hideSponsored() {
-  if (!UNIT_SEL || !SPONSORED.length) return;
+  if (!UNIT_SEL || (!SPONSORED.length && !AD_CTA.length)) return;
   var units = document.querySelectorAll(UNIT_SEL);
   for (var i = 0; i < units.length; i++) {
     var u = units[i];
@@ -598,7 +618,9 @@ function hideSponsored() {
     var sig = (u.textContent || '').length + ':' + u.childElementCount;
     if (unitMemo.get(u) === sig) continue;
     unitMemo.set(u, sig);
-    if (unitIsSponsored(u)) hide(unitOf(u) || u, 'sponsored');
+    if (SPONSORED.length && unitIsSponsored(u)) { hide(unitOf(u) || u, 'sponsored'); continue; }
+    var cta = unitAdCta(u);
+    if (cta) hide(unitOf(u) || u, 'ad-cta:' + cta);
   }
 }
 
@@ -881,9 +903,14 @@ function dumpPage() {
       }).join(','));
       if (el.tagName === 'text') bits.push('svg-text=' + JSON.stringify(el.textContent.slice(0, 30)));
       if (el.tagName === 'use') {
-        var ut = useText(el);
-        bits.push('use=' + (el.getAttribute('href') || el.getAttribute('xlink:href')) +
-          ' -> ' + (ut === null ? '(not found)' : JSON.stringify(ut.slice(0, 40))));
+        var href = el.getAttribute('href') || el.getAttribute('xlink:href') || '';
+        var ref = href.charAt(0) === '#' ? document.getElementById(href.slice(1)) : null;
+        var bb = '';
+        try { var b = el.getBBox(); bb = ' bbox=' + Math.round(b.width) + 'x' + Math.round(b.height); } catch (e) {}
+        bits.push('use=' + href + bb + ' -> ' + (ref
+          ? '<' + ref.tagName + ' kids=' + ref.childElementCount + '> text=' + JSON.stringify((ref.textContent || '').slice(0, 30)) +
+            ' html=' + JSON.stringify(ref.outerHTML.replace(/\s+/g, ' ').slice(0, 260))
+          : '(not found)'));
       }
       ['::before', '::after'].forEach(function (pse) {
         var c = getComputedStyle(el, pse).content;
@@ -892,6 +919,13 @@ function dumpPage() {
       if (bits.length) extra.push('   ' + bits.join(' ') + ' on ' + describe(el).slice(0, 100));
     }
     if (extra.length) out.push('  non-text labels:\n' + extra.join('\n'));
+    var btns = [];
+    var bs = u.querySelectorAll('[role="button"],button,[role="link"]');
+    for (var bi = 0; bi < bs.length && btns.length < 25; bi++) {
+      var bt = (bs[bi].textContent || '').trim() || bs[bi].getAttribute('aria-label') || '';
+      if (bt && bt.length <= 40 && btns.indexOf(bt) < 0) btns.push(bt);
+    }
+    out.push('  buttons/links: ' + JSON.stringify(btns));
   });
   // What forces the page wide?
   var wide = [];

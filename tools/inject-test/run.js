@@ -130,7 +130,7 @@ function check(name, ok, detail) {
   await page.waitForTimeout(900);
   const d = await page.evaluate(() => {
     const h = id => document.getElementById(id).getAttribute('data-fbk-hidden');
-    return { p1: h('p1'), p2: h('p2'), p3: h('p3'), p4: h('p4'), p5: h('p5'), p6: h('p6'), p7: h('p7'), p8: h('p8'), p9: h('p9'), left: h('leftnav'), right: h('rightrail'),
+    return { p1: h('p1'), p2: h('p2'), p3: h('p3'), p4: h('p4'), p5: h('p5'), p6: h('p6'), p7: h('p7'), p8: h('p8'), p9: h('p9'), p10: h('p10'), p11: h('p11'), left: h('leftnav'), right: h('rightrail'),
       feedWidth: Math.round(document.getElementById('feed').getBoundingClientRect().width),
       feedPathOnFeed: document.getElementById('feed').hasAttribute('data-fbk-feedpath'),
       chatsMarked: !!document.querySelector('#chats [data-fbk-unit], #chats[data-fbk-feedpath]') };
@@ -144,6 +144,8 @@ function check(name, ok, detail) {
   check('desktop: SVG <use> label "Ad" hidden', d.p7 === 'sponsored', d);
   check('desktop: SVG <use> timestamp kept', d.p8 === null, d);
   check('desktop: "Ad" letters with U+034F joiners and a positioned decoy hidden', d.p9 === 'sponsored', d);
+  check('desktop: ad with "Learn more" button hidden', d.p10 === 'ad-cta:learnmore', d);
+  check('desktop: friend post saying "learn more" in text kept', d.p11 === null, d);
   check('desktop: left column hidden', d.left === 'layout:side-column', d);
   check('desktop: right rail hidden', d.right === 'layout:side-column', d);
   check('desktop: feed takes the width', d.feedWidth > 1000, d.feedWidth);

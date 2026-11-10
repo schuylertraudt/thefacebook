@@ -123,6 +123,16 @@
   "_dumpLabels": "Extra labels whose surroundings the debug panel's 'Dump page' logs (for writing selectors).",
   "dumpLabels": ["What's on your mind?", "Feeds", "Friends", "Most recent", "Home", "Menu", "Notifications"],
 
+  "_adCtaLabels": "Posts containing a button/link with exactly one of these texts are hidden as ads (the desktop feed draws its Ad label as SVG shapes with no text).",
+  "adCtaLabels": [
+    "Learn more", "Shop now", "Sign up", "Book now", "Get offer", "Apply now",
+    "Download", "Install now", "Order now", "Contact us", "Get quote", "Subscribe",
+    "Donate now", "Listen now", "Watch more", "Send WhatsApp message", "Get directions",
+    "Call now", "Request time", "See menu", "Play game", "Use app", "Get showtimes",
+    "Buy tickets", "Get tickets", "Buy now", "Get started", "Start order", "Get access",
+    "Open link", "Visit website", "Learn More", "Shop Now"
+  ],
+
   "sponsoredFuzzyRatio": 2.0,
   "_sponsoredFuzzyMinLength": "Labels shorter than this (e.g. \"Ad\") only match exactly.",
   "sponsoredFuzzyMinLength": 5,

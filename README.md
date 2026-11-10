@@ -90,7 +90,11 @@ you out.
   zero-size or positioned off the label's line (Facebook's decoy letters) are dropped.
   Invisible joiners (U+034F after every letter) are stripped. Labels drawn as SVG
   (`<use href="#SvgX">` pointing at a `<text>` elsewhere in the page) are resolved and
-  compared too; this is how the desktop feed draws "Ad".
+  compared too.
+- **Ad call-to-action buttons** (`adCtaLabels`): the desktop feed draws its "Ad" label as SVG
+  shapes with no text, so posts with an ad-only button ("Learn more", "Shop now", ...) are
+  hidden as `ad-cta:<label>`. Button text must match exactly; the words in post text don't
+  count.
 - **Automatic feed units** (`autoFeedUnits`): the element with the most text+media children
   is taken as the feed list and its children are marked `data-fbk-unit`, so Sponsored /
   section hiding works without knowing Facebook's markup.
