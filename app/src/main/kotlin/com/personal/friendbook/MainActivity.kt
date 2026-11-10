@@ -59,6 +59,15 @@ class MainActivity : ComponentActivity() {
     /** Reported by inject.js: whether the page's scroller is at the top (for pull-to-refresh). */
     @Volatile private var pageAtTop = true
 
+    /**
+     * Addresses the current friends-feed document has rewritten itself to via replaceState
+     * (e.g. "/"). Valid until the next full page load.
+     */
+    private val feedRewrites: MutableSet<String> = ConcurrentHashMap.newKeySet()
+
+    private fun isFeedDocument(url: String?): Boolean =
+        url != null && (rules.isFriendsFeed(url) || url in feedRewrites)
+
     // Redirect bookkeeping, shared between the UI thread and the JS bridge thread.
     private val redirectGuard = RedirectGuard()
 
@@ -100,7 +109,7 @@ class MainActivity : ComponentActivity() {
             val url = webView.url
             when {
                 errorView.isVisible -> finish()
-                webView.canGoBack() && (url == null || !rules.isFriendsFeed(url)) -> webView.goBack()
+                webView.canGoBack() && !isFeedDocument(url) -> webView.goBack()
                 else -> finish()
             }
         }
@@ -138,8 +147,17 @@ class MainActivity : ComponentActivity() {
         s.setSupportMultipleWindows(false)
         s.javaScriptCanOpenWindowsAutomatically = false
         s.allowFileAccess = false
-        s.userAgentString = rules.uaRemoveTokens.fold(WebSettings.getDefaultUserAgent(this)) { ua, t ->
-            ua.replace(t, "")
+        if (rules.desktopMode && rules.desktopUserAgent.isNotEmpty()) {
+            s.userAgentString = rules.desktopUserAgent
+            s.useWideViewPort = true
+            s.loadWithOverviewMode = true
+            s.setSupportZoom(true)
+            s.builtInZoomControls = true
+            s.displayZoomControls = false
+        } else {
+            s.userAgentString = rules.uaRemoveTokens.fold(WebSettings.getDefaultUserAgent(this)) { ua, t ->
+                ua.replace(t, "")
+            }
         }
         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
             WebSettingsCompat.setAlgorithmicDarkeningAllowed(s, false)
@@ -343,6 +361,7 @@ class MainActivity : ComponentActivity() {
 
         override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
             pageAtTop = true
+            feedRewrites.clear()
             val v = rules.classify(url)
             logNav("native:start", v, url)
             when {
@@ -368,6 +387,10 @@ class MainActivity : ComponentActivity() {
 
         override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
             // Catches SPA (pushState) changes too; backstop for inject.js.
+            if (url in feedRewrites) {
+                if (debug) DebugLog.add("native:history", "ALLOW [feed-rewrite] $url")
+                return
+            }
             val v = rules.classify(url)
             logNav("native:history", v, url)
             if (v.decision == Decision.BLOCK && filtering() &&
@@ -472,11 +495,27 @@ class MainActivity : ComponentActivity() {
         fun redirectTarget(): String = startUrl()
 
         @JavascriptInterface
-        fun isFriendsFeed(url: String): Boolean = rules.isFriendsFeed(url)
+        fun isFriendsFeed(url: String): Boolean = isFeedDocument(url)
+
+        /**
+         * replaceState from inject.js. [docUrl] is the address the document was loaded at.
+         * A friends-feed document rewriting its address to a friendsFeedCanonical URL is kept.
+         */
+        @JavascriptInterface
+        fun checkReplace(url: String, docUrl: String): String {
+            if (rules.isFriendsFeed(docUrl) && rules.isFeedCanonical(url)) {
+                feedRewrites.add(url)
+                DebugLog.add("spa:replaceState", "ALLOW [feed-rewrite of $docUrl] $url")
+                return "allow"
+            }
+            if (url in feedRewrites) return "allow"
+            return checkUrl(url, "spa:replaceState")
+        }
 
         /** Returns "allow", "block" (caller must location.replace to the feed) or "external". */
         @JavascriptInterface
         fun checkUrl(url: String, source: String): String {
+            if (url in feedRewrites) return "allow"
             val v = rules.classify(url)
             logNav(source, v, url)
             return when (v.decision) {

@@ -3,6 +3,13 @@
 
   "friendsFeedUrl": "https://m.facebook.com/?filter=friends&sk=h_chr",
 
+  "_friendsFeedCanonical": "Path+query patterns the friends-feed document may rewrite its own address to via history.replaceState (Facebook rewrites the feed URL to '/' after loading). Only tolerated inside a document that was loaded as friendsFeedUrl.",
+  "friendsFeedCanonical": ["^/(\\?.*)?$"],
+
+  "_desktopMode": "true = load the desktop site with desktopUserAgent (set friendsFeedUrl/loginUrl/sessionCookie.url to www.facebook.com). Use if the mobile site has no friends-only feed.",
+  "desktopMode": false,
+  "desktopUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+
   "_login": "While the session cookie is missing the app starts at loginUrl and allow/block rules are NOT enforced (Facebook moves the login form between /, /login/ and /unified/login_via/). Rules apply as soon as the cookie exists.",
   "loginUrl": "https://m.facebook.com/login/",
   "sessionCookie": { "url": "https://m.facebook.com", "name": "c_user" },
@@ -150,11 +157,11 @@
     "addClasses": ["__fb-light-mode"]
   },
 
-  "_headerLinks": "url \"@friendsFeedUrl\" means the friendsFeedUrl value above.",
+  "_headerLinks": "url \"@friendsFeedUrl\" means the friendsFeedUrl value above; relative URLs resolve against the current host.",
   "headerTitle": "Friendbook",
   "headerLinks": [
     { "label": "Feed", "url": "@friendsFeedUrl" },
-    { "label": "Notifications", "url": "https://m.facebook.com/notifications" },
-    { "label": "Profile", "url": "https://m.facebook.com/me" }
+    { "label": "Notifications", "url": "/notifications" },
+    { "label": "Profile", "url": "/me" }
   ]
 }

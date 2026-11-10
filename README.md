@@ -65,6 +65,15 @@ you out.
 
 - **Launch**: loads `friendsFeedUrl` directly when logged in, `loginUrl` when not. The Home
   feed is never loaded.
+- **Feed URL rewrite**: m.facebook.com loads `friendsFeedUrl` and then rewrites the address
+  bar to `/` with `history.replaceState`. Inside a document that was loaded as the friends
+  feed, rewrites to a `friendsFeedCanonical` pattern are kept (JS check, native history
+  check, popstate/back). `/` stays blocked as a navigation of its own (Home tab, links).
+- **Desktop mode** (`desktopMode: true`): loads the desktop site with `desktopUserAgent`
+  (wide viewport, pinch zoom). Use it if the mobile site serves the mixed Home feed for
+  `friendsFeedUrl`. Also set `friendsFeedUrl`, `loginUrl` and `sessionCookie.url` to
+  `https://www.facebook.com/…`; the desktop friends feed is
+  `https://www.facebook.com/?filter=friends&sk=h_chr`.
 - **Logged out** (no `sessionCookie` cookie): allow/block rules are not enforced. Facebook
   serves the login form at `/`, `/login/` and `/unified/login_via/app/…` interchangeably, and
   logged-out sessions can only reach login pages. Once the cookie exists, rules apply, so

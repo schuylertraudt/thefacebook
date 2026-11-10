@@ -85,6 +85,7 @@ try { if (CFG.timestampPattern) TIME_RE = new RegExp(CFG.timestampPattern, 'i');
 // URL filtering (SPA side). Native code handles full navigations.
 // ---------------------------------------------------------------------------------------
 
+var DOC_URL = location.href; // address this document was loaded at
 var lastUrl = location.href;
 var redirecting = false;
 
@@ -92,7 +93,11 @@ var redirecting = false;
 function enforce(url, source) {
   if (redirecting) return false;
   var verdict = 'allow';
-  try { verdict = NATIVE.checkUrl(url, source); } catch (e) {}
+  try {
+    verdict = source === 'spa:replaceState' && typeof NATIVE.checkReplace === 'function'
+      ? NATIVE.checkReplace(url, DOC_URL)
+      : NATIVE.checkUrl(url, source);
+  } catch (e) {}
   if (verdict === 'block') {
     redirecting = true;
     var target = FEED_URL;
@@ -170,7 +175,9 @@ function forceLight() {
 }
 
 function headerHref(url) {
-  return url === '@friendsFeedUrl' ? FEED_URL : url;
+  if (url === '@friendsFeedUrl') return FEED_URL;
+  // Relative links resolve against the current host, so they work on m. and www.
+  try { return new URL(url, location.href).href; } catch (e) { return url; }
 }
 
 function buildHeader() {

@@ -93,6 +93,15 @@ class UrlRules(
     private val externalSchemes: Set<String>,
     val uaRemoveTokens: List<String>,
     val injectOrigins: Set<String>,
+    /**
+     * URLs (path+query patterns) the friends-feed document may rewrite its own address to
+     * with history.replaceState. Facebook canonicalises the feed URL to "/" after loading;
+     * the content is still what was served for friendsFeedUrl.
+     */
+    private val feedCanonical: List<Regex> = emptyList(),
+    /** Load the desktop site (www) with [desktopUserAgent] instead of the mobile site. */
+    val desktopMode: Boolean = false,
+    val desktopUserAgent: String = "",
 ) {
     private val feed: ParsedUrl = requireNotNull(ParsedUrl.parse(friendsFeedUrl)) {
         "friendsFeedUrl is not a valid URL: $friendsFeedUrl"
@@ -143,6 +152,13 @@ class UrlRules(
 
     fun isInternalHost(host: String): Boolean = internalHosts.any { it.containsMatchIn(host) }
 
+    /** True if [url] is an address the friends-feed document may rewrite itself to (see feedCanonical). */
+    fun isFeedCanonical(url: String): Boolean {
+        val u = ParsedUrl.parse(url) ?: return false
+        if ((u.scheme != "http" && u.scheme != "https") || !isInternalHost(u.host)) return false
+        return feedCanonical.any { it.containsMatchIn(u.pathAndQuery) }
+    }
+
     /** True if [url] is the friends feed (any internal host, same path, all feed query params present). */
     fun isFriendsFeed(url: String): Boolean {
         val u = ParsedUrl.parse(url) ?: return false
@@ -185,6 +201,9 @@ class UrlRules(
                 externalSchemes = strings(o.optJSONArray("externalSchemes")).map { it.lowercase() }.toSet(),
                 uaRemoveTokens = strings(o.optJSONArray("uaRemoveTokens")),
                 injectOrigins = strings(o.optJSONArray("injectOrigins")).toSet(),
+                feedCanonical = regexes(o.optJSONArray("friendsFeedCanonical")),
+                desktopMode = o.optBoolean("desktopMode", false),
+                desktopUserAgent = o.optString("desktopUserAgent", ""),
             )
         }
 

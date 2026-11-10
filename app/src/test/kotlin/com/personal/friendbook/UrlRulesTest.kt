@@ -77,6 +77,22 @@ class UrlRulesTest {
         assertEquals("https://m.facebook.com", rules.sessionCookieUrl)
     }
 
+    @Test fun feedDocumentMayRewriteItselfToRoot() {
+        // Observed on device: the feed document calls replaceState('/') ~0.5 s after load.
+        assertTrue(rules.isFeedCanonical("https://m.facebook.com/"))
+        assertTrue(rules.isFeedCanonical("https://m.facebook.com/?wtsid=rdr_abc"))
+        assertFalse(rules.isFeedCanonical("https://m.facebook.com/watch/"))
+        assertFalse(rules.isFeedCanonical("https://m.facebook.com/reel/1"))
+        assertFalse(rules.isFeedCanonical("https://example.org/"))
+        // The rewrite target is still blocked as a navigation of its own.
+        assertBlocked("https://m.facebook.com/")
+    }
+
+    @Test fun desktopModeDefaultsOff() {
+        assertFalse(rules.desktopMode)
+        assertTrue(rules.desktopUserAgent.contains("Windows"))
+    }
+
     // --- home root ------------------------------------------------------------------
 
     @Test fun homeRootIsBlocked() {

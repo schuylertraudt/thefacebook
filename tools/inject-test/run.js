@@ -29,13 +29,21 @@ function check(name, ok, detail) {
   await page.route('https://m.facebook.com/**', r => r.fulfill({ contentType: 'text/html', body: fixture }));
   await page.addInitScript(() => {
     let debug = false;
+    const rewrites = new Set();
     window.FriendbookNative = {
       isDebug: () => debug,
       toggleDebug: () => { debug = !debug; },
       shouldRun: u => u.startsWith('https://m.facebook.com'),
-      isFriendsFeed: u => /[?&]sk=h_chr/.test(u) && /filter=friends/.test(u),
+      isFriendsFeed: u => (/[?&]sk=h_chr/.test(u) && /filter=friends/.test(u)) || rewrites.has(u),
+      checkReplace: (u, doc) => {
+        const isFeed = /[?&]sk=h_chr/.test(doc) && /filter=friends/.test(doc);
+        if (isFeed && /^\/(\?.*)?$/.test(new URL(u).pathname + new URL(u).search)) { rewrites.add(u); return 'allow'; }
+        return window.FriendbookNative.checkUrl(u, 'spa:replaceState');
+      },
       checkUrl: (u, s) => {
-        const v = /^\/(watch|reel)/.test(new URL(u).pathname) ? 'block' : 'allow';
+        if (rewrites.has(u)) return 'allow';
+        const p = new URL(u);
+        const v = /^\/(watch|reel)/.test(p.pathname) || (p.pathname === '/' && !/sk=h_chr/.test(p.search)) ? 'block' : 'allow';
         window.__nlog(s, v + ' ' + u);
         return debug ? 'allow' : v;
       },
@@ -76,6 +84,16 @@ function check(name, ok, detail) {
   check('author name styled', st.nameColor === 'rgb(59, 89, 152)', st.nameColor);
   check('timestamp tagged', st.timeTagged, st.timeTagged);
 
+  // Device log: the feed document rewrites its own URL to "/" right after loading.
+  await page.evaluate(() => history.replaceState({}, '', '/'));
+  await page.waitForTimeout(800);
+  check('feed document may replaceState itself to /', new URL(page.url()).pathname === '/' && !new URL(page.url()).search, page.url());
+  check('header still present after rewrite', await page.evaluate(() => !!document.getElementById('friendbook-header')), null);
+  await page.evaluate(() => history.pushState({}, '', '/jane.doe.123'));
+  await page.waitForTimeout(200);
+  await page.evaluate(() => history.back());
+  await page.waitForTimeout(800);
+  check('back to rewritten feed URL is kept', new URL(page.url()).pathname === '/', page.url());
   await page.evaluate(() => history.pushState({}, '', '/jane.doe.123'));
   await page.waitForTimeout(200);
   check('allowed pushState stays', page.url().endsWith('/jane.doe.123'), page.url());
