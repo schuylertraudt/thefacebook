@@ -79,6 +79,13 @@ you out.
 - **Fonts**: theme.css replaces Facebook's font everywhere, then lists the page's own web
   fonts (`--fbk-page-fonts`, read from `document.fonts`) as per-glyph fallbacks, so
   Facebook's icon-font characters still render instead of boxes.
+- **Side columns** (`hideSideColumns`): every element laid out beside the feed (desktop left
+  "Feeds" nav, right rail) is hidden so the feed gets the full width. Desktop mode also
+  uses `desktopTextZoom` (120%) and a 480 px layout width for readability.
+- **Ad labels**: the desktop site labels ads "Ad". Labels shorter than
+  `sponsoredFuzzyMinLength` match exactly only, and sponsored labels only count inside a
+  post's header strip (`sponsoredHeaderPx`), so "Dad" or an "Ad" in post text never
+  hides a friend's post. Labels attached via `aria-labelledby` are resolved.
 - **Automatic feed units** (`autoFeedUnits`): the element with the most text+media children
   is taken as the feed list and its children are marked `data-fbk-unit`, so Sponsored /
   section hiding works without knowing Facebook's markup.

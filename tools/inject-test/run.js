@@ -33,7 +33,7 @@ function check(name, ok, detail) {
     window.FriendbookNative = {
       isDebug: () => debug,
       toggleDebug: () => { debug = !debug; },
-      shouldRun: u => u.startsWith('https://m.facebook.com'),
+      shouldRun: u => /^https:\/\/(m|www)\.facebook\.com/.test(u),
       isFriendsFeed: u => (/[?&]sk=h_chr/.test(u) && /filter=friends/.test(u)) || rewrites.has(u),
       checkReplace: (u, doc) => {
         const isFeed = /[?&]sk=h_chr/.test(doc) && /filter=friends/.test(doc);
@@ -121,6 +121,25 @@ function check(name, ok, detail) {
   await page.evaluate(() => history.pushState({}, '', '/reel/1'));
   await page.waitForTimeout(800);
   check('debug mode does not filter', page.url().endsWith('/reel/1'), page.url());
+
+  // ---- desktop-style page: columns, "Ad" label, aria-labelledby label
+  const desk = fs.readFileSync(path.join(__dirname, 'fixture-desktop.html'), 'utf8');
+  await page.route('https://www.facebook.com/**', r => r.fulfill({ contentType: 'text/html', body: desk }));
+  await page.evaluate(() => window.FriendbookNative.toggleDebug()); // debug off again
+  await page.goto('https://www.facebook.com/?filter=friends&sk=h_chr');
+  await page.waitForTimeout(900);
+  const d = await page.evaluate(() => {
+    const h = id => document.getElementById(id).getAttribute('data-fbk-hidden');
+    return { p1: h('p1'), p2: h('p2'), p3: h('p3'), p4: h('p4'), left: h('leftnav'), right: h('rightrail'),
+      feedWidth: Math.round(document.getElementById('feed').getBoundingClientRect().width) };
+  });
+  check('desktop: "Ad" in post header hidden', d.p2 === 'sponsored', d);
+  check('desktop: aria-labelledby Sponsored hidden', d.p4 === 'sponsored', d);
+  check('desktop: friend post mentioning "Dad" kept', d.p1 === null, d);
+  check('desktop: "Ad" deep in post body (not header) kept', d.p3 === null, d);
+  check('desktop: left column hidden', d.left === 'layout:side-column', d);
+  check('desktop: right rail hidden', d.right === 'layout:side-column', d);
+  check('desktop: feed takes the width', d.feedWidth > 1000, d.feedWidth);
 
   if (process.env.SHOW_LOG) console.log(logs.join('\n'));
   await browser.close();

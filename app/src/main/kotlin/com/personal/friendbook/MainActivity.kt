@@ -184,6 +184,7 @@ class MainActivity : ComponentActivity() {
             s.setSupportZoom(true)
             s.builtInZoomControls = true
             s.displayZoomControls = false
+            s.textZoom = rules.desktopTextZoom
         } else {
             s.userAgentString = rules.uaRemoveTokens.fold(WebSettings.getDefaultUserAgent(this)) { ua, t ->
                 ua.replace(t, "")
@@ -192,6 +193,7 @@ class MainActivity : ComponentActivity() {
             s.loadWithOverviewMode = false
             s.setSupportZoom(false)
             s.builtInZoomControls = false
+            s.textZoom = 100
         }
         findViewById<Button>(R.id.siteToggle)?.setText(
             if (desktop) R.string.mobile_site else R.string.desktop_site

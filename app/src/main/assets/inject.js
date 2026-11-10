@@ -79,6 +79,8 @@ var AUTO_UNIT_ATTR = 'data-fbk-unit';
 var UNIT_SEL = list(CFG.feedUnitSelectors).concat(CFG.autoFeedUnits === false ? [] : ['[' + AUTO_UNIT_ATTR + ']']).join(',');
 var NAME_SEL = list(CFG.nameSelectors).join(',');
 var FUZZY_RATIO = +CFG.sponsoredFuzzyRatio || 0;
+var FUZZY_MIN_LEN = +CFG.sponsoredFuzzyMinLength || 5;
+var HEADER_PX = +CFG.sponsoredHeaderPx || 0;
 var CLIMB_MAX_TEXT = +CFG.sectionClimbMaxText || 2500;
 var TIME_RE = null;
 try { if (CFG.timestampPattern) TIME_RE = new RegExp(CFG.timestampPattern, 'i'); } catch (e) {}
@@ -324,6 +326,8 @@ function sponsoredMatch(el, t) {
   for (var i = 0; i < SPONSORED.length; i++) {
     var lab = SPONSORED[i];
     if (n === lab) return true;
+    // Short labels ("Ad") only match exactly: fuzzy matching would catch "Dad", "and"...
+    if (lab.length < FUZZY_MIN_LEN) continue;
     if (!isSubsequence(lab, n)) continue;
     if (FUZZY_RATIO > 0 && n.length <= lab.length * FUZZY_RATIO) return true;
     if (norm(el.innerText) === lab) return true;
@@ -334,18 +338,67 @@ function sponsoredMatch(el, t) {
 var SPONSORED_MAXLEN = 0;
 SPONSORED.forEach(function (l) { SPONSORED_MAXLEN = Math.max(SPONSORED_MAXLEN, l.length * 4 + 20); });
 
+/** Is el within the header strip (top sponsoredHeaderPx px) of the unit? */
+function inHeader(el, unitTop) {
+  if (!(HEADER_PX > 0)) return true;
+  var r = el.getBoundingClientRect();
+  if (!r.width && !r.height) return true; // not laid out (hidden decoy / lazy): don't exclude
+  return r.top - unitTop <= HEADER_PX;
+}
+
 function unitIsSponsored(unit) {
+  var unitTop = unit.getBoundingClientRect().top;
   var withLabel = unit.querySelectorAll('[aria-label]');
   for (var i = 0; i < withLabel.length; i++) {
-    if (SPONSORED.indexOf(norm(withLabel[i].getAttribute('aria-label'))) >= 0) return true;
+    if (SPONSORED.indexOf(norm(withLabel[i].getAttribute('aria-label'))) >= 0 &&
+        inHeader(withLabel[i], unitTop)) return true;
+  }
+  // Labels attached by reference: <a aria-labelledby="id">, text lives in #id (maybe elsewhere).
+  var byRef = unit.querySelectorAll('[aria-labelledby]');
+  for (var r = 0; r < byRef.length; r++) {
+    var ids = (byRef[r].getAttribute('aria-labelledby') || '').split(/\s+/);
+    for (var q = 0; q < ids.length; q++) {
+      var ref = ids[q] && document.getElementById(ids[q]);
+      if (ref && SPONSORED.indexOf(norm(ref.textContent)) >= 0 && inHeader(byRef[r], unitTop)) return true;
+    }
   }
   var cands = unit.querySelectorAll('a,span,b,strong');
   for (var j = 0; j < cands.length; j++) {
     var t = cands[j].textContent;
     if (!t || t.length > SPONSORED_MAXLEN) continue;
-    if (sponsoredMatch(cands[j], t)) return true;
+    if (sponsoredMatch(cands[j], t) && inHeader(cands[j], unitTop)) return true;
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------------------
+// Side columns: any element beside the feed (no horizontal overlap with the feed's
+// ancestor at that level) is hidden, so the feed gets the full width.
+// ---------------------------------------------------------------------------------------
+
+function feedAnchor() {
+  if (autoContainer && autoContainer.isConnected) return autoContainer;
+  var u = UNIT_SEL ? document.querySelector(UNIT_SEL) : null;
+  return u ? u.parentElement : null;
+}
+
+function hideSideColumns() {
+  if (!CFG.hideSideColumns) return;
+  var anchor = feedAnchor();
+  if (!anchor) return;
+  for (var a = anchor; a && a.parentElement && a !== document.body; a = a.parentElement) {
+    var ar = a.getBoundingClientRect();
+    if (!ar.width) continue;
+    for (var s = a.parentElement.firstElementChild; s; s = s.nextElementSibling) {
+      if (s === a || s.id === HEADER_ID || s.id === STYLE_ID || s.hasAttribute(HIDDEN_ATTR)) continue;
+      if (/^(SCRIPT|STYLE|LINK|META)$/.test(s.tagName)) continue;
+      var sr = s.getBoundingClientRect();
+      if (!sr.width || !sr.height) continue;
+      var beside = sr.right <= ar.left + 4 || sr.left >= ar.right - 4;
+      var overlapsVertically = sr.bottom > ar.top && sr.top < ar.bottom;
+      if (beside && overlapsVertically) hide(s, 'layout:side-column');
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------
@@ -729,6 +782,7 @@ var pass = safe(function () {
   ensureViewport();
   if (!document.body) return;
   autoMarkUnits();
+  hideSideColumns();
   hideBySelector();
   hideSponsored();
   hideSections(onFeed());

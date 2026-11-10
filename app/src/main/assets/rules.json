@@ -9,7 +9,9 @@
   "_desktopMode": "true = start in desktop mode: desktopUserAgent, feed/login URLs moved to desktopHost, page laid out desktopViewportWidth CSS px wide and scaled to the screen. Can also be switched per session from the debug panel. The mobile site ignores filter=friends (serves Home); the desktop site honours it.",
   "desktopMode": true,
   "desktopHost": "www.facebook.com",
-  "desktopViewportWidth": 600,
+  "desktopViewportWidth": 480,
+  "_desktopTextZoom": "WebView text zoom (percent) in desktop mode; enlarges text only.",
+  "desktopTextZoom": 120,
   "desktopUserAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
 
   "_login": "While the session cookie is missing the app starts at loginUrl and allow/block rules are NOT enforced (Facebook moves the login form between /, /login/ and /unified/login_via/). Rules apply as soon as the cookie exists.",
@@ -99,7 +101,7 @@
 
   "hideLabels": {
     "_sponsored": "Feed units containing one of these labels (exact or with decoy letters, see sponsoredFuzzyRatio) are hidden.",
-    "sponsored": ["Sponsored", "Paid partnership"],
+    "sponsored": ["Sponsored", "Ad", "Paid partnership"],
     "_sections": "Blocks headed by one of these labels are hidden on every page.",
     "sections": [
       "Suggested for you",
@@ -122,13 +124,20 @@
   "dumpLabels": ["What's on your mind?", "Feeds", "Friends", "Most recent", "Home", "Menu", "Notifications"],
 
   "sponsoredFuzzyRatio": 2.0,
+  "_sponsoredFuzzyMinLength": "Labels shorter than this (e.g. \"Ad\") only match exactly.",
+  "sponsoredFuzzyMinLength": 5,
+  "_sponsoredHeaderPx": "Sponsored labels only count within this many px of the top of a post (its header). 0 = anywhere.",
+  "sponsoredHeaderPx": 160,
+  "_hideSideColumns": "Hide every element laid out beside the feed (left nav, right rail).",
+  "hideSideColumns": true,
   "sectionClimbMaxText": 2500,
 
   "_feedUnitSelectors": "What counts as one post / feed unit.",
   "feedUnitSelectors": [
     "[role=\"article\"]",
     "[data-pagelet^=\"FeedUnit\"]",
-    "div[data-tracking-duration-id]"
+    "div[data-tracking-duration-id]",
+    "div[aria-posinset]"
   ],
 
   "_hideSelectors": "Elements always hidden, grouped by reason (the group name shows up in data-fbk-hidden).",

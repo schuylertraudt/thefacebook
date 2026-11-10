@@ -65,6 +65,9 @@
   --link-color: #3b5998 !important;
   --text-link: #3b5998 !important;
 
+  /* Facebook reserves space for its (hidden) top bar with this. */
+  --header-height: 0px !important;
+
   /* Shape */
   --card-corner-radius: 0 !important;
   --button-corner-radius: 0 !important;

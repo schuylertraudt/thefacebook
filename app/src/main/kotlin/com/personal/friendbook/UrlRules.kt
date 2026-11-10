@@ -103,6 +103,7 @@ class UrlRules(
     val desktopMode: Boolean = false,
     val desktopUserAgent: String = "",
     val desktopHost: String = "",
+    val desktopTextZoom: Int = 100,
 ) {
     private val feed: ParsedUrl = requireNotNull(ParsedUrl.parse(friendsFeedUrl)) {
         "friendsFeedUrl is not a valid URL: $friendsFeedUrl"
@@ -213,6 +214,7 @@ class UrlRules(
                 desktopMode = o.optBoolean("desktopMode", false),
                 desktopUserAgent = o.optString("desktopUserAgent", ""),
                 desktopHost = o.optString("desktopHost", ""),
+                desktopTextZoom = o.optInt("desktopTextZoom", 100),
             )
         }
 
